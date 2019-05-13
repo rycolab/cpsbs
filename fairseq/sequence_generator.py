@@ -31,6 +31,7 @@ class SequenceGenerator(object):
         sampling_temperature=1.,
         diverse_beam_groups=-1,
         diverse_beam_strength=0.5,
+        stochastic_beam_search=False,
         match_source_len=False,
         no_repeat_ngram_size=0,
     ):
@@ -95,7 +96,7 @@ class SequenceGenerator(object):
                 tgt_dict, min_len_a=1, min_len_b=0, max_len_a=1, max_len_b=0,
             )
         else:
-            self.search = search.BeamSearch(tgt_dict)
+            self.search = search.BeamSearch(tgt_dict, stochastic_beam_search, sampling_topk, sampling_temperature)
 
     @torch.no_grad()
     def generate(
@@ -151,6 +152,10 @@ class SequenceGenerator(object):
         # initialize buffers
         scores = src_tokens.new(bsz * beam_size, max_len + 1).float().fill_(0)
         scores_buf = scores.clone()
+        log_ps = src_tokens.data.new(bsz * beam_size, max_len + 1).float().fill_(0)
+        log_ps_buf = log_ps.clone()
+        log_ps_t = src_tokens.data.new(bsz * beam_size, max_len + 1).float().fill_(0)
+        log_ps_t_buf = log_ps_t.clone()
         tokens = src_tokens.data.new(bsz * beam_size, max_len + 2).long().fill_(self.pad)
         tokens_buf = tokens.clone()
         tokens[:, 0] = bos_token or self.eos
@@ -178,7 +183,7 @@ class SequenceGenerator(object):
                 buffers[name] = type_of.new()
             return buffers[name]
 
-        def is_finished(sent, step, unfinalized_scores=None):
+        def is_finished(sent, step, unfinalized_scores=None, unfin_idx=None):
             """
             Check whether we've finished generation for a given sentence, by
             comparing the worst score among finalized hypotheses to the best
@@ -190,14 +195,17 @@ class SequenceGenerator(object):
                     return True
                 # stop if the best unfinalized score is worse than the worst
                 # finalized one
-                best_unfinalized_score = unfinalized_scores[sent].max()
+                # WK: Bugfix, see https://github.com/pytorch/fairseq/commit/fa52d20277246a59c13260fdfb7d71101e521478
+                best_unfinalized_score = unfinalized_scores[sent if unfin_idx is None else unfin_idx].max()
                 if self.normalize_scores:
+                    assert False, "TODO find out if not early stopping with normalized scores is valid!"
+                    # TODO: shouldn't we normalize by current length rather than max length?
                     best_unfinalized_score /= max_len ** self.len_penalty
                 if worst_finalized[sent]['score'] >= best_unfinalized_score:
                     return True
             return False
 
-        def finalize_hypos(step, bbsz_idx, eos_scores, unfinalized_scores=None):
+        def finalize_hypos(step, bbsz_idx, eos_scores, eos_log_ps, eos_log_ps_t, unfinalized_scores=None):
             """
             Finalize the given hypotheses at this step, while keeping the total
             number of finalized hypotheses per sentence <= beam_size.
@@ -229,6 +237,20 @@ class SequenceGenerator(object):
             # convert from cumulative to per-position scores
             pos_scores[:, 1:] = pos_scores[:, 1:] - pos_scores[:, :-1]
 
+            assert not torch.isnan(pos_scores).any(), "Nans in scores"
+
+            # compute log_p per token position (without temperature)
+            pos_log_ps = log_ps.index_select(0, bbsz_idx)[:, :step + 1]
+            pos_log_ps[:, step] = eos_log_ps
+            # convert from cumulative to per-position scores
+            pos_log_ps[:, 1:] = pos_log_ps[:, 1:] - pos_log_ps[:, :-1]
+
+            # compute log_p per token position (with temperature)
+            pos_log_ps_t = log_ps_t.index_select(0, bbsz_idx)[:, :step + 1]
+            pos_log_ps_t[:, step] = eos_log_ps_t
+            # convert from cumulative to per-position scores
+            pos_log_ps_t[:, 1:] = pos_log_ps_t[:, 1:] - pos_log_ps_t[:, :-1]
+
             # normalize sentence-level scores
             if self.normalize_scores:
                 eos_scores /= (step + 1) ** self.len_penalty
@@ -242,7 +264,8 @@ class SequenceGenerator(object):
                     cum_unfin.append(prev)
 
             sents_seen = set()
-            for i, (idx, score) in enumerate(zip(bbsz_idx.tolist(), eos_scores.tolist())):
+            for i, (idx, score, log_p, log_p_t) in enumerate(
+                    zip(bbsz_idx.tolist(), eos_scores.tolist(), eos_log_ps.tolist(), eos_log_ps_t.tolist())):
                 unfin_idx = idx // beam_size
                 sent = unfin_idx + cum_unfin[unfin_idx]
 
@@ -264,9 +287,13 @@ class SequenceGenerator(object):
                     return {
                         'tokens': tokens_clone[i],
                         'score': score,
+                        'log_p': log_p,
+                        'log_p_t': log_p_t,
                         'attention': hypo_attn,  # src_len x tgt_len
                         'alignment': alignment,
                         'positional_scores': pos_scores[i],
+                        'positional_log_ps': pos_log_ps[i],
+                        'positional_log_ps_t': pos_log_ps_t[i],
                     }
 
                 if len(finalized[sent]) < beam_size:
@@ -287,7 +314,7 @@ class SequenceGenerator(object):
             newly_finished = []
             for sent, unfin_idx in sents_seen:
                 # check termination conditions for this sentence
-                if not finished[sent] and is_finished(sent, step, unfinalized_scores):
+                if not finished[sent] and is_finished(sent, step, unfinalized_scores, unfin_idx=unfin_idx):
                     finished[sent] = True
                     newly_finished.append(unfin_idx)
             return newly_finished
@@ -327,9 +354,13 @@ class SequenceGenerator(object):
                 attn[:, :, step + 1].copy_(avg_attn_scores)
 
             scores = scores.type_as(lprobs)
+            log_ps = log_ps.type_as(lprobs)
+            log_ps_t = log_ps_t.type_as(lprobs)
             scores_buf = scores_buf.type_as(lprobs)
             eos_bbsz_idx = buffer('eos_bbsz_idx')
             eos_scores = buffer('eos_scores', type_of=scores)
+            eos_log_ps = buffer('eos_log_ps', type_of=scores)
+            eos_log_ps_t = buffer('eos_log_ps_t', type_of=scores)
             if step < max_len:
                 self.search.set_src_lengths(src_lengths)
 
@@ -349,6 +380,7 @@ class SequenceGenerator(object):
                         lprobs[bbsz_idx, banned_tokens[bbsz_idx]] = -math.inf
 
                 if prefix_tokens is not None and step < prefix_tokens.size(1):
+                    assert False, "Prefix tokens not yet supported"
                     probs_slice = lprobs.view(bsz, -1, lprobs.size(-1))[:, 0, :]
                     cand_scores = torch.gather(
                         probs_slice, dim=1,
@@ -372,23 +404,47 @@ class SequenceGenerator(object):
                         cand_indices[partial_prefix_mask] = partial_indices[partial_prefix_mask]
                         cand_beams[partial_prefix_mask] = partial_beams[partial_prefix_mask]
                 else:
-                    cand_scores, cand_indices, cand_beams = self.search.step(
+                    cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
                         step,
                         lprobs.view(bsz, -1, self.vocab_size),
                         scores.view(bsz, beam_size, -1)[:, :, :step],
+                        log_ps.view(bsz, beam_size, -1)[:, :, :step],
+                        log_ps_t.view(bsz, beam_size, -1)[:, :, :step]
                     )
             else:
-                # make probs contain cumulative scores for each hypothesis
-                lprobs.add_(scores[:, step - 1].unsqueeze(-1))
+                # Note: we have one flat batch of bsz * beam_size, by sorting we mix everything
+                # However, we will pass along the indices of the sort, from which the id of the sentence
+                # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
+                # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
+                # but this way we can deal with varying numbers of samples per sequence easily
+                if isinstance(self.search, search.BeamSearch) and self.search.stochastic:
+                    # For beam search, we simply stop here with the k samples we have
+                    # Sort by the perturbed log-probability
+                    torch.sort(
+                        scores[:, step - 1],
+                        descending=True,
+                        out=(eos_scores, eos_bbsz_idx),
+                    )
+                else:
+                    # All other cases (beam search, sampling)
+                    # make probs contain cumulative scores for each hypothesis
+                    lprobs.add_(scores[:, step - 1].unsqueeze(-1))
 
-                # finalize all active hypotheses once we hit max_len
-                # pick the hypothesis with the highest prob of EOS right now
-                torch.sort(
-                    lprobs[:, self.eos],
-                    descending=True,
-                    out=(eos_scores, eos_bbsz_idx),
-                )
-                num_remaining_sent -= len(finalize_hypos(step, eos_bbsz_idx, eos_scores))
+                    # finalize all active hypotheses once we hit max_len
+                    # pick the hypothesis with the highest prob of EOS right now
+                    torch.sort(
+                        lprobs[:, self.eos],
+                        descending=True,
+                        out=(eos_scores, eos_bbsz_idx),
+                    )
+
+                # We do not want lprobs as scores since the last probs have been added,
+                # this is not what is actually what happens if we sample eos with prob 1
+                torch.gather(scores[:, step - 1], -1, eos_bbsz_idx, out=eos_scores)
+                torch.gather(log_ps[:, step - 1], -1, eos_bbsz_idx, out=eos_log_ps)
+                torch.gather(log_ps_t[:, step - 1], -1, eos_bbsz_idx, out=eos_log_ps_t)
+                # Sort without dimension sorts on last dimension
+                num_remaining_sent -= len(finalize_hypos(step, eos_bbsz_idx, eos_scores, eos_log_ps, eos_log_ps_t))
                 assert num_remaining_sent == 0
                 break
 
@@ -414,7 +470,19 @@ class SequenceGenerator(object):
                         mask=eos_mask[:, :beam_size],
                         out=eos_scores,
                     )
-                    finalized_sents = finalize_hypos(step, eos_bbsz_idx, eos_scores, cand_scores)
+                    torch.masked_select(
+                        cand_log_p[:, :beam_size],
+                        mask=eos_mask[:, :beam_size],
+                        out=eos_log_ps,
+                    )
+                    torch.masked_select(
+                        cand_log_p_t[:, :beam_size],
+                        mask=eos_mask[:, :beam_size],
+                        out=eos_log_ps_t,
+                    )
+                    finalized_sents = finalize_hypos(
+                        step, eos_bbsz_idx, eos_scores, eos_log_ps, eos_log_ps_t, cand_scores
+                    )
                     num_remaining_sent -= len(finalized_sents)
 
             assert num_remaining_sent >= 0
@@ -435,6 +503,8 @@ class SequenceGenerator(object):
                 bbsz_offsets.resize_(new_bsz, 1)
                 cand_bbsz_idx = cand_beams.add(bbsz_offsets)
                 cand_scores = cand_scores[batch_idxs]
+                cand_log_p = cand_log_p[batch_idxs]
+                cand_log_p_t = cand_log_p_t[batch_idxs]
                 cand_indices = cand_indices[batch_idxs]
                 if prefix_tokens is not None:
                     prefix_tokens = prefix_tokens[batch_idxs]
@@ -442,6 +512,10 @@ class SequenceGenerator(object):
 
                 scores = scores.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
                 scores_buf.resize_as_(scores)
+                log_ps = log_ps.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
+                log_ps_buf.resize_as_(log_ps)
+                log_ps_t = log_ps_t.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
+                log_ps_t_buf.resize_as_(log_ps_t)
                 tokens = tokens.view(bsz, -1)[batch_idxs].view(new_bsz * beam_size, -1)
                 tokens_buf.resize_as_(tokens)
                 if attn is not None:
@@ -496,9 +570,25 @@ class SequenceGenerator(object):
                     scores[:, :step], dim=0, index=active_bbsz_idx,
                     out=scores_buf[:, :step],
                 )
+                torch.index_select(
+                    log_ps[:, :step], dim=0, index=active_bbsz_idx,
+                    out=log_ps_buf[:, :step],
+                )
+                torch.index_select(
+                    log_ps_t[:, :step], dim=0, index=active_bbsz_idx,
+                    out=log_ps_t_buf[:, :step],
+                )
             torch.gather(
                 cand_scores, dim=1, index=active_hypos,
                 out=scores_buf.view(bsz, beam_size, -1)[:, :, step],
+            )
+            torch.gather(
+                cand_log_p, dim=1, index=active_hypos,
+                out=log_ps_buf.view(bsz, beam_size, -1)[:, :, step],
+            )
+            torch.gather(
+                cand_log_p_t, dim=1, index=active_hypos,
+                out=log_ps_t_buf.view(bsz, beam_size, -1)[:, :, step],
             )
 
             # copy attention for active hypotheses
@@ -511,6 +601,8 @@ class SequenceGenerator(object):
             # swap buffers
             tokens, tokens_buf = tokens_buf, tokens
             scores, scores_buf = scores_buf, scores
+            log_ps, log_ps_buf = log_ps_buf, log_ps
+            log_ps_t, log_ps_t_buf = log_ps_t_buf, log_ps_t
             if attn is not None:
                 attn, attn_buf = attn_buf, attn
 

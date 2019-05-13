@@ -1,109 +1,41 @@
-# Introduction <img src="fairseq_logo.png" width="50"> 
+# Stochastic Beam Search
 
-Fairseq(-py) is a sequence modeling toolkit that allows researchers and
-developers to train custom models for translation, summarization, language
-modeling and other text generation tasks. It provides reference implementations
-of various sequence-to-sequence models, including:
-- **Convolutional Neural Networks (CNN)**
-  - [Dauphin et al. (2017): Language Modeling with Gated Convolutional Networks](examples/language_model/conv_lm/README.md)
-  - [Gehring et al. (2017): Convolutional Sequence to Sequence Learning](examples/conv_seq2seq/README.md)
-  - [Edunov et al. (2018): Classical Structured Prediction Losses for Sequence to Sequence Learning](https://github.com/pytorch/fairseq/tree/classic_seqlevel)
-  - [Fan et al. (2018): Hierarchical Neural Story Generation](examples/stories/README.md)
-- **LightConv and DynamicConv models**
-  - **_New_** [Wu et al. (2019): Pay Less Attention with Lightweight and Dynamic Convolutions](examples/pay_less_attention_paper/README.md)
-- **Long Short-Term Memory (LSTM) networks**
-  - [Luong et al. (2015): Effective Approaches to Attention-based Neural Machine Translation](https://arxiv.org/abs/1508.04025)
-  - [Wiseman and Rush (2016): Sequence-to-Sequence Learning as Beam-Search Optimization](https://arxiv.org/abs/1606.02960)
-- **Transformer (self-attention) networks**
-  - [Vaswani et al. (2017): Attention Is All You Need](https://arxiv.org/abs/1706.03762)
-  - [Ott et al. (2018): Scaling Neural Machine Translation](examples/scaling_nmt/README.md)
-  - [Edunov et al. (2018): Understanding Back-Translation at Scale](examples/backtranslation/README.md)
-  - **_New_** [Baevski and Auli (2018): Adaptive Input Representations for Neural Language Modeling](examples/language_model/transformer_lm/README.md)
-  - **_New_** [Shen et al. (2019): Mixture Models for Diverse Machine Translation: Tricks of the Trade](examples/translation_moe/README.md)
+This is an implementation of Stochastic Beam Search, a stochastic variant of beam search that draws samples *without* replacement from a sequence model.
 
-Fairseq features:
-- multi-GPU (distributed) training on one machine or across multiple machines
-- fast generation on both CPU and GPU with multiple search algorithms implemented:
-  - beam search
-  - Diverse Beam Search ([Vijayakumar et al., 2016](https://arxiv.org/abs/1610.02424))
-  - sampling (unconstrained and top-k)
-- large mini-batch training even on a single GPU via delayed updates
-- fast half-precision floating point (FP16) training
-- extensible: easily register new models, criterions, tasks, optimizers and learning rate schedulers
+### For details, see our [ICML 2019](https://icml.cc/) paper:
 
-We also provide [pre-trained models](#pre-trained-models-and-examples) for several benchmark
-translation and language modeling datasets.
+[Stochastic Beams and Where To Find Them](https://arxiv.org/abs/1903.06059): The Gumbel-Top-k trick for Sampling Sequences Without Replacement.
 
-![Model](fairseq.gif)
+![Stochastic Beam Search](stochastic-beam-search.png)
 
-# Requirements and Installation
+### Summary
+We can draw k samples *without replacement* from a categorical distribution by adding independent Gumbel noise to the log-probabilities and taking the top k largest of the *perturbed log-probabilities*. This can be seen as an extension of the Gumbel-Max trick (for which k = 1) and as a partial ranking according to the Plackett-Luce model.
 
-* [PyTorch](http://pytorch.org/) version >= 1.0.0
-* Python version >= 3.6
-* For training new models, you'll also need an NVIDIA GPU and [NCCL](https://github.com/NVIDIA/nccl)
+For a sequence model, we cannot add Gumbel noise to the log-probabilities for all sequences in the exponentially large domain, but we can use a stochastic variant of Beam Search to find the top k sequences, *without* instantiating the complete domain.
 
-Please follow the instructions here to install PyTorch: https://github.com/pytorch/pytorch#installation.
+Stochastic Beam Search makes use of the factorized structure of the sequence model to sample the Gumbel noise in a top down manner, and only extends the k partial sequences that can possibly be extended to a top k completed sequence.
 
-If you use Docker make sure to increase the shared memory size either with
-`--ipc=host` or `--shm-size` as command line options to `nvidia-docker run`.
+For more details, [see the paper](https://arxiv.org/abs/1903.06059).
 
-After PyTorch is installed, you can install fairseq with `pip`:
+### Usage instructions
+For installation instructions and basic fairseq usage instruction, please go to [the fairseq repository](https://github.com/pytorch/fairseq).
+To use Stochastic Beam Search for generation:
+- Add the ``--stochastic-beam-search`` option and use the (normal) ``--beam`` option with ``generate.py``
+- Set the ``--nbest`` option equal to ``--beam`` (using a beam size greater than nbest is equivalent)
+- For theoretical correctness of the sampling algorithm, you cannot use heuristic beam search modifications such as length normalization and early stopping. Therefore run *with* ``--no-early-stopping`` and ``--unnormalized``
+- Use the ``--sampling_temperature`` option to specify the temperature used for (local) softmax normalization. For models trained using maximum likelihood, the default temperature of 1.0 does not yield good translations, so use a lower temperature.
+- Example: ``python generate.py --stochastic-beam-search --beam 5 --nbest 5 --no-early-stopping --unnormalized --sampling_temperature 0.3 ...``
+
+### Note
+As the beam search implementation in fairseq is a bit complicated (see also [here](https://github.com/pytorch/fairseq/issues/535)), this implementation of Stochastic Beam Search has some rough edges and is not guaranteed to be compatibel with all fairseq generation parameters.
+The code is not specifically optimized for memory usage etc.
+
+If you have any comments or suggestions, please create an issue or contact me (e-mail address in the paper). If you use Stochastic Beam Search, we would be happy if you cite our paper: 
 ```
-pip install fairseq
+@inproceedings{kool2019stochastic,
+  title={Stochastic Beams and Where to Find Them: The Gumbel-Top-k Trick for Sampling Sequences Without Replacement},
+  author={Wouter Kool and Herke van Hoof and Max Welling},
+  booktitle={International Conference on Machine Learning},
+  year={2019}
+}
 ```
-
-**Installing from source**
-
-To install fairseq from source and develop locally:
-```
-git clone https://github.com/pytorch/fairseq
-cd fairseq
-pip install --editable .
-```
-
-**Improved training speed**
-
-Training speed can be further improved by installing NVIDIA's
-[apex](https://github.com/NVIDIA/apex) library with the `--cuda_ext` option.
-fairseq will automatically switch to the faster modules provided by apex.
-
-# Getting Started
-
-The [full documentation](https://fairseq.readthedocs.io/) contains instructions
-for getting started, training new models and extending fairseq with new model
-types and tasks.
-
-# Pre-trained models and examples
-
-We provide pre-trained models and pre-processed, binarized test sets for several tasks listed below,
-as well as example training and evaluation commands.
-
-- [Translation](examples/translation/README.md): convolutional and transformer models are available
-- [Language Modeling](examples/language_model/README.md): convolutional models are available
-
-We also have more detailed READMEs to reproduce results from specific papers:
-- [Shen et al. (2019) Mixture Models for Diverse Machine Translation: Tricks of the Trade](examples/translation_moe/README.md)
-- [Wu et al. (2019): Pay Less Attention with Lightweight and Dynamic Convolutions](examples/pay_less_attention_paper/README.md)
-- [Edunov et al. (2018): Understanding Back-Translation at Scale](examples/backtranslation/README.md)
-- [Edunov et al. (2018): Classical Structured Prediction Losses for Sequence to Sequence Learning](https://github.com/pytorch/fairseq/tree/classic_seqlevel)
-- [Fan et al. (2018): Hierarchical Neural Story Generation](examples/stories/README.md)
-- [Ott et al. (2018): Scaling Neural Machine Translation](examples/scaling_nmt/README.md)
-- [Gehring et al. (2017): Convolutional Sequence to Sequence Learning](examples/conv_seq2seq/README.md)
-- [Dauphin et al. (2017): Language Modeling with Gated Convolutional Networks](examples/language_model/conv_lm/README.md)
-
-# Join the fairseq community
-
-* Facebook page: https://www.facebook.com/groups/fairseq.users
-* Google group: https://groups.google.com/forum/#!forum/fairseq-users
-
-# License
-fairseq(-py) is BSD-licensed.
-The license applies to the pre-trained models as well.
-We also provide an additional patent grant.
-
-# Credits
-This is a PyTorch version of
-[fairseq](https://github.com/facebookresearch/fairseq), a sequence-to-sequence
-learning toolkit from Facebook AI Research. The original authors of this
-reimplementation are (in no particular order) Sergey Edunov, Myle Ott, and Sam
-Gross.

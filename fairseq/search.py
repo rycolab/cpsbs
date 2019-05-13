@@ -8,6 +8,9 @@
 import math
 
 import torch
+import torch.nn.functional as F
+
+from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 
 
 class Search(object):
@@ -18,12 +21,16 @@ class Search(object):
         self.eos = tgt_dict.eos()
         self.vocab_size = len(tgt_dict)
         self.scores_buf = None
+        self.log_ps_buf = None
+        self.log_ps_t_buf = None
         self.indices_buf = None
         self.beams_buf = None
 
     def _init_buffers(self, t):
         if self.scores_buf is None:
             self.scores_buf = t.new()
+            self.log_ps_buf = t.new()
+            self.log_ps_t_buf = t.new()
             self.indices_buf = torch.LongTensor().to(device=t.device)
             self.beams_buf = torch.LongTensor().to(device=t.device)
 
@@ -55,34 +62,68 @@ class Search(object):
 
 class BeamSearch(Search):
 
-    def __init__(self, tgt_dict):
+    def __init__(self, tgt_dict, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
         super().__init__(tgt_dict)
+        self.stochastic = stochastic
+        self.sampling_topk = sampling_topk
+        assert self.sampling_topk == -1, "Sampling top-k for beam search not yet supported"
+        self.sampling_temperature = sampling_temperature
 
-    def step(self, step, lprobs, scores):
+    def step(self, step, lprobs, scores, log_ps, log_ps_t):
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
+
+        lprobs_t = lprobs.clone()
+        if self.sampling_temperature != 1.0:
+            lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
             # only the first beam
+            lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
+
+            if self.stochastic:
+                cand_scores = gumbel_like(lprobs_t) + lprobs_t
+            else:
+                cand_scores = lprobs_t
         else:
             # make probs contain cumulative scores for each hypothesis
-            lprobs.add_(scores[:, :, step - 1].unsqueeze(-1))
+            lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
+            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
+
+            if self.stochastic:
+                assert self.sampling_topk == -1
+                cand_scores, _ = gumbel_with_maximum(lprobs_t, scores[:, :, step - 1], -1)
+            else:
+                cand_scores = lprobs_t
 
         torch.topk(
-            lprobs.view(bsz, -1),
+            cand_scores.view(bsz, -1),
             k=min(
                 # Take the best 2 x beam_size predictions. We'll choose the first
                 # beam_size of these which don't predict eos to continue with.
                 beam_size * 2,
-                lprobs.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
+                cand_scores.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
             ),
             out=(self.scores_buf, self.indices_buf),
         )
+
+        # Gather cumulative
+        torch.gather(
+            lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+        )
+
+        if self.stochastic:
+            torch.gather(
+                lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+            )
+        else:
+            self.log_ps_t_buf = self.scores_buf
+
         torch.div(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
-        return self.scores_buf, self.indices_buf, self.beams_buf
+        return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
 class LengthConstrainedBeamSearch(Search):
@@ -121,7 +162,7 @@ class DiverseBeamSearch(Search):
         self.diversity_buf = None
         self.beam = BeamSearch(tgt_dict)
 
-    def step(self, step, lprobs, scores):
+    def step(self, step, lprobs, scores, log_ps, log_ps_t):
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
         if beam_size % self.num_groups != 0:
@@ -145,7 +186,7 @@ class DiverseBeamSearch(Search):
             else:
                 lprobs_g = lprobs_g.contiguous()
 
-            scores_buf, indices_buf, beams_buf = self.beam.step(step, lprobs_g, scores_g)
+            scores_buf, _, _, indices_buf, beams_buf = self.beam.step(step, lprobs_g, scores_g, scores_g, scores_g)
             beams_buf.mul_(self.num_groups).add_(g)
 
             scores_G.append(scores_buf.clone())
@@ -163,7 +204,7 @@ class DiverseBeamSearch(Search):
         self.scores_buf = torch.stack(scores_G, dim=2, out=self.scores_buf).view(bsz, -1)
         self.indices_buf = torch.stack(indices_G, dim=2, out=self.indices_buf).view(bsz, -1)
         self.beams_buf = torch.stack(beams_G, dim=2, out=self.beams_buf).view(bsz, -1)
-        return self.scores_buf, self.indices_buf, self.beams_buf
+        return self.scores_buf, self.scores_buf, self.scores_buf, self.indices_buf, self.beams_buf
 
 
 class Sampling(Search):
@@ -173,7 +214,7 @@ class Sampling(Search):
         self.sampling_topk = sampling_topk
         self.sampling_temperature = sampling_temperature
 
-    def step(self, step, lprobs, scores):
+    def step(self, step, lprobs, scores, log_ps, log_ps_t):
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
 
@@ -192,20 +233,22 @@ class Sampling(Search):
 
         # sampling temperature
         if self.sampling_temperature != 1.:
-            lprobs_nopad = lprobs_nopad.div_(self.sampling_temperature)
+            lprobs_nopad_t = F.log_softmax(lprobs_nopad / self.sampling_temperature, -1)
+        else:
+            lprobs_nopad_t = lprobs_nopad
 
         # sample
-        probs_nopad = lprobs_nopad.exp_()
+        probs_nopad_t = lprobs_nopad_t.exp()
         if step == 0:
             self.indices_buf = torch.multinomial(
-                probs_nopad.view(bsz, -1),
+                probs_nopad_t.view(bsz, -1),
                 beam_size,
                 replacement=True,
                 out=self.indices_buf,
             ).view(bsz, beam_size)
         else:
             self.indices_buf = torch.multinomial(
-                probs_nopad.view(bsz * beam_size, -1),
+                probs_nopad_t.view(bsz * beam_size, -1),
                 1,
                 replacement=True,
                 out=self.indices_buf,
@@ -213,16 +256,24 @@ class Sampling(Search):
 
         if step == 0:
             # expand to beam size
-            probs_nopad = probs_nopad.expand(bsz, beam_size, -1)
+            lprobs_nopad = lprobs_nopad.expand(bsz, beam_size, -1)
+            lprobs_nopad_t = lprobs_nopad_t.expand(bsz, beam_size, -1)
 
-        # gather scores
+        # gather probs
         torch.gather(
-            probs_nopad,
+            lprobs_nopad,
             dim=2,
             index=self.indices_buf.unsqueeze(-1),
-            out=self.scores_buf,
+            out=self.log_ps_buf,
         )
-        self.scores_buf = self.scores_buf.log_().view(bsz, -1)
+        torch.gather(
+            lprobs_nopad_t,
+            dim=2,
+            index=self.indices_buf.unsqueeze(-1),
+            out=self.log_ps_t_buf,
+        )
+        self.log_ps_buf = self.log_ps_buf.view(bsz, -1)
+        self.log_ps_t_buf = self.log_ps_t_buf.view(bsz, -1)
 
         # remap indices if using top-k sampling
         if self.sampling_topk > 0:
@@ -239,13 +290,22 @@ class Sampling(Search):
             self.beams_buf = self.indices_buf.new_zeros(bsz, beam_size)
         else:
             self.beams_buf = torch.arange(0, beam_size, out=self.beams_buf).repeat(bsz, 1)
-            # make scores cumulative
-            self.scores_buf.add_(
+            # make log_ps cumulative
+            self.log_ps_buf.add_(
                 torch.gather(
-                    scores[:, :, step - 1],
+                    log_ps[:, :, step - 1],
                     dim=1,
                     index=self.beams_buf,
                 )
             )
-
-        return self.scores_buf, self.indices_buf, self.beams_buf
+            # make log_ps_t cumulative
+            self.log_ps_t_buf.add_(
+                torch.gather(
+                    log_ps_t[:, :, step - 1],
+                    dim=1,
+                    index=self.beams_buf,
+                )
+            )
+        # Scores buf is not used for sampling
+        self.scores_buf = self.log_ps_buf.clone()
+        return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf

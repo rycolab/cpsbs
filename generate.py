@@ -18,8 +18,8 @@ from fairseq.utils import import_user_module
 
 def main(args):
     assert args.path is not None, '--path required for generation!'
-    assert not args.sampling or args.nbest == args.beam, \
-        '--sampling requires --nbest to be equal to --beam'
+    assert not (args.sampling or args.stochastic_beam_search) or args.nbest == args.beam, \
+        '--sampling or --stochastic-beam-search requires --nbest to be equal to --beam'
     assert args.replace_unk is None or args.raw_text, \
         '--replace-unk requires a raw text dataset (--raw-text)'
 
@@ -89,6 +89,17 @@ def main(args):
         scorer = bleu.SacrebleuScorer()
     else:
         scorer = bleu.Scorer(tgt_dict.pad(), tgt_dict.eos(), tgt_dict.unk())
+
+    if args.sacrebleu:
+        sentence_scorer = bleu.SacrebleuScorer()
+    else:
+        sentence_scorer = bleu.Scorer(tgt_dict.pad(), tgt_dict.eos(), tgt_dict.unk())
+    def score_sentence(hypo_tokens, target_tokens):
+        sentence_scorer.reset()
+        sentence_scorer.add(target_tokens, hypo_tokens)
+        return sentence_scorer.score()
+
+
     num_sentences = 0
     has_target = True
     with progress_bar.build_progress_bar(args, itr) as t:
@@ -146,7 +157,12 @@ def main(args):
                     )
 
                     if not args.quiet:
-                        print('H-{}\t{}\t{}'.format(sample_id, hypo['score'], hypo_str))
+                        import math
+                        print('H-{}\t(score={}, p={}, p_t={})\t{}'.format(
+                            sample_id,
+                            hypo['score'], math.exp(hypo['log_p']), math.exp(hypo['log_p_t']),
+                            hypo_str
+                        ))
                         print('P-{}\t{}'.format(
                             sample_id,
                             ' '.join(map(
@@ -154,11 +170,36 @@ def main(args):
                                 hypo['positional_scores'].tolist(),
                             ))
                         ))
+                        print('Probs-{}\t{}'.format(
+                            sample_id,
+                            ' '.join(map(
+                                lambda x: '{:.4f}'.format(math.exp(x)),
+                                hypo['positional_log_ps'].tolist(),
+                            ))
+                        ))
+                        print('Probs(T)-{}\t{}'.format(
+                            sample_id,
+                            ' '.join(map(
+                                lambda x: '{:.4f}'.format(math.exp(x)),
+                                hypo['positional_log_ps_t'].tolist(),
+                            ))
+                        ))
 
                         if args.print_alignment:
                             print('A-{}\t{}'.format(
                                 sample_id,
                                 ' '.join(map(lambda x: str(utils.item(x)), alignment))
+                            ))
+
+                        if has_target and sentence_scorer is not None:
+                            target_tokens_tmp = target_tokens
+                            if align_dict is not None or args.remove_bpe is not None:
+                                # Convert back to tokens for evaluation with unk replacement and/or without BPE
+                                target_tokens_tmp = tgt_dict.encode_line(target_str, add_if_not_exist=True)
+
+                            print('B-{}\t{}'.format(
+                                sample_id,
+                                score_sentence(hypo_tokens, target_tokens_tmp)
                             ))
 
                     # Score only the top hypothesis
