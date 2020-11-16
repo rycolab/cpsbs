@@ -146,6 +146,7 @@ def main(args):
                         print('T-{}\t{}'.format(sample_id, target_str))
 
                 # Process top predictions
+                div_score = 0
                 for i, hypo in enumerate(hypos[i][:min(len(hypos), args.nbest)]):
                     hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
                         hypo_tokens=hypo['tokens'].int().cpu(),
@@ -163,6 +164,7 @@ def main(args):
                             hypo['score'], math.exp(hypo['log_p']), math.exp(hypo['log_p_t']),
                             hypo_str
                         ))
+                        print("len unigrams {}".format(len(hypo_str)))
                         print('P-{}\t{}'.format(
                             sample_id,
                             ' '.join(map(
