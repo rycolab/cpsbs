@@ -62,9 +62,10 @@ class Search(object):
 
 class BeamSearch(Search):
 
-    def __init__(self, tgt_dict, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
+    def __init__(self, tgt_dict, naive_stochastic=False, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
         super().__init__(tgt_dict)
         self.stochastic = stochastic
+        self.naive_stochastic = naive_stochastic
         self.sampling_topk = sampling_topk
         assert self.sampling_topk == -1, "Sampling top-k for beam search not yet supported"
         self.sampling_temperature = sampling_temperature
@@ -83,7 +84,7 @@ class BeamSearch(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            if self.stochastic:
+            if self.stochastic or self.naive_stochastic:
                 cand_scores = gumbel_like(lprobs_t) + lprobs_t
             else:
                 cand_scores = lprobs_t
@@ -114,7 +115,7 @@ class BeamSearch(Search):
             lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
 
-        if self.stochastic:
+        if self.stochastic or self.naive_stochastic:
             torch.gather(
                 lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
             )

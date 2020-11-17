@@ -432,6 +432,8 @@ def add_generation_args(parser):
                        help='temperature for random sampling')
     group.add_argument('--stochastic-beam-search', action='store_true',
                        help='Use stochastic Beam Search (e.g. sample without replacement with sampling-temperature)')
+    group.add_argument('--naive-stochastic-beam-search', action='store_true',
+                       help='Use naive stochastic Beam Search (e.g. sample without replacement with sampling-temperature)')
     group.add_argument('--diverse-beam-groups', default=-1, type=int, metavar='N',
                        help='number of groups for Diverse Beam Search')
     group.add_argument('--diverse-beam-strength', default=0.5, type=float, metavar='N',

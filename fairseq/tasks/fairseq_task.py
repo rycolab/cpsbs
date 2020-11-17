@@ -201,6 +201,7 @@ class FairseqTask(object):
                 diverse_beam_groups=args.diverse_beam_groups,
                 diverse_beam_strength=args.diverse_beam_strength,
                 stochastic_beam_search=args.stochastic_beam_search,
+                naive_stochastic_beam_search=args.naive_stochastic_beam_search,
                 match_source_len=args.match_source_len,
                 no_repeat_ngram_size=args.no_repeat_ngram_size,
             )

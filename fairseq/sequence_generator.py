@@ -32,6 +32,7 @@ class SequenceGenerator(object):
         diverse_beam_groups=-1,
         diverse_beam_strength=0.5,
         stochastic_beam_search=False,
+        naive_stochastic_beam_search=False,
         match_source_len=False,
         no_repeat_ngram_size=0,
     ):
@@ -96,7 +97,7 @@ class SequenceGenerator(object):
                 tgt_dict, min_len_a=1, min_len_b=0, max_len_a=1, max_len_b=0,
             )
         else:
-            self.search = search.BeamSearch(tgt_dict, stochastic_beam_search, sampling_topk, sampling_temperature)
+            self.search = search.BeamSearch(tgt_dict, naive_stochastic_beam_search, stochastic_beam_search, sampling_topk, sampling_temperature)
 
     @torch.no_grad()
     def generate(

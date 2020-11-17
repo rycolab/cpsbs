@@ -18,8 +18,8 @@ from fairseq.utils import import_user_module
 
 def main(args):
     assert args.path is not None, '--path required for generation!'
-    assert not (args.sampling or args.stochastic_beam_search) or args.nbest == args.beam, \
-        '--sampling or --stochastic-beam-search requires --nbest to be equal to --beam'
+    assert not (args.sampling or args.stochastic_beam_search or args.naive_stochastic_beam_search) or args.nbest == args.beam, \
+        '--sampling or --stochastic-beam-search or --naive-stochastic-beam-search requires --nbest to be equal to --beam'
     assert args.replace_unk is None or args.raw_text, \
         '--replace-unk requires a raw text dataset (--raw-text)'
 
