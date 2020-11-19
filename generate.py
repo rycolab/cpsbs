@@ -164,7 +164,6 @@ def main(args):
                             hypo['score'], math.exp(hypo['log_p']), math.exp(hypo['log_p_t']),
                             hypo_str
                         ))
-                        print("len unigrams {}".format(len(hypo_str)))
                         print('P-{}\t{}'.format(
                             sample_id,
                             ' '.join(map(
