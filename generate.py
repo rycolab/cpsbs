@@ -147,6 +147,7 @@ def main(args):
 
                 # Process top predictions
                 div_score = 0
+                print(len(hypos))
                 for i, hypo in enumerate(hypos[i][:min(len(hypos), args.nbest)]):
                     hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
                         hypo_tokens=hypo['tokens'].int().cpu(),
