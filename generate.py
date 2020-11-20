@@ -147,8 +147,7 @@ def main(args):
 
                 # Process top predictions
                 div_score = 0
-                print(len(hypos))
-                for i, hypo in enumerate(hypos[i][:min(len(hypos), args.nbest)]):
+                for j, hypo in enumerate(hypos[i][:min(len(hypos[i]), args.nbest)]):
                     hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
                         hypo_tokens=hypo['tokens'].int().cpu(),
                         src_str=src_str,
@@ -205,7 +204,7 @@ def main(args):
                             ))
 
                     # Score only the top hypothesis
-                    if has_target and i == 0:
+                    if has_target and j == 0:
                         if align_dict is not None or args.remove_bpe is not None:
                             # Convert back to tokens for evaluation with unk replacement and/or without BPE
                             target_tokens = tgt_dict.encode_line(target_str, add_if_not_exist=True)
