@@ -84,6 +84,8 @@ class CPS(Search):
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
         print("start normalization")
+        print(n)
+        print(k)
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
