@@ -79,6 +79,7 @@ class CPS(Search):
     def _initialize_dp(self, bsz, k, n):
         torch.zeros((bsz, k + 1, n + 1), out=self.subset_sum_product_probs)
         self.subset_sum_product_probs[:, 0, :] = 1
+        print(self.subset_sum_product_probs.size())
 
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
