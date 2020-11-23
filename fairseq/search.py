@@ -84,8 +84,6 @@ class CPS(Search):
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
         print("start normalization")
-        print(n)
-        print(k)
         self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
         self.p_rolled = torch.roll(p, -1, 0)
         torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
@@ -122,14 +120,16 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         print("start sample")
-        for j in range(bsz):
-            _ = self._calc_normalization(self.p[j, :], k, j)
-            to_pick_number = k
-            for i in range(n, 0, -1):
-                if torch.mul(torch.rand(1), self.subset_sum_product_probs[j, to_pick_number, i]) <= torch.mul(self.p[j, i], self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]):
-                    self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
-                    to_pick_number -= 1
-                    if to_pick_number == 0: break
+        self._calc_normalization(self.p[0, :], k, j)
+        self.p = self.p.detach().numpy()
+        self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
+
+        to_pick_number = k
+        for i in range(n, 0, -1):
+            if torch.rand(1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]:
+                self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
+                to_pick_number -= 1
+                if to_pick_number == 0: break
         print("end sample")
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         return torch.gather(p, -1, self.samples_idx), self.samples_idx
