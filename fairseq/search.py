@@ -115,7 +115,7 @@ class CPS(Search):
 
     def cps_sample(self, p, k, bsz):
         self.p = p.detach().numpy()
-        self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1, dtype=float)
+        self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         n = self.p.size()[1] - 1
         k = min(n, k)
 
