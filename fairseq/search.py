@@ -126,7 +126,7 @@ class CPS(Search):
 
         to_pick_number = k
         for i in range(n, 0, -1):
-            if torch.rand(1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]:
+            if torch.rand(1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
                 self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
                 to_pick_number -= 1
                 if to_pick_number == 0: break
