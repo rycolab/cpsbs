@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from fairseq.gumbel import gumbel_like, gumbel_with_maximum
+import numpy as np
 
 
 class Search(object):
@@ -71,28 +72,28 @@ class CPS(Search):
         super()._init_buffers(t)
 
         self.remaining_subsetsum_product_probs = torch.FloatTensor().to(device=t.device)
-        self.subset_sum_product_probs = torch.FloatTensor().to(device=t.device)
+        self.subset_sum_product_probs = None
         self.dp = torch.FloatTensor().to(device=t.device)
-        self.p = torch.FloatTensor().to(device=t.device)
+        self.p = None
         self.samples_idx = torch.LongTensor().to(device=t.device)
 
     def _initialize_dp(self, bsz, k, n):
-        torch.zeros((bsz, k + 1, n + 1), out=self.subset_sum_product_probs)
+        self.subset_sum_product_probs = np.zeros((bsz, k + 1, n + 1))
         self.subset_sum_product_probs[:, 0, :] = 1
         print(self.subset_sum_product_probs.size())
 
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
         print("start normalization")
-        self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
-        self.p_rolled = torch.roll(p, -1, 0)
-        torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
-        torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
+        # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
+        # self.p_rolled = torch.roll(p, -1, 0)
+        # torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
+        # torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
 
-        # for r in range(1, k + 1):
-        #     for i in range(1, n + 1):
-        #         self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
-        # normalization_factor = self.subset_sum_product_probs[j, k, n]
+        for r in range(1, k + 1):
+            for i in range(1, n + 1):
+                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
+        normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
         # return normalization_factor
         return
@@ -113,23 +114,18 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, p, k, bsz):
-        torch.cat((torch.ones(bsz, 1).to(device=p.device), p), dim=1, out=self.p)
+        self.p = p.detach().numpy()
+        self.p = np.cat((np.zeros(bsz, 1), p), dim=1)
         n = self.p.size()[1] - 1
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        import numpy as np
-
         print("start sample")
         import time
         time_start = time.time()
         self._calc_normalization(self.p[0, :], k, 0)
-
-        self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
-        self.p = self.p.detach().numpy()
-
 
         to_pick_number = k
         for i in range(n, 0, -1):
