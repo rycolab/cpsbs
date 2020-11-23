@@ -33,6 +33,7 @@ class SequenceGenerator(object):
         diverse_beam_strength=0.5,
         stochastic_beam_search=False,
         naive_stochastic_beam_search=False,
+        cps=False,
         match_source_len=False,
         no_repeat_ngram_size=0,
     ):
@@ -96,6 +97,8 @@ class SequenceGenerator(object):
             self.search = search.LengthConstrainedBeamSearch(
                 tgt_dict, min_len_a=1, min_len_b=0, max_len_a=1, max_len_b=0,
             )
+        elif cps:
+            self.search = search.CPS(tgt_dict, sampling_topk, sampling_temperature)
         else:
             self.search = search.BeamSearch(tgt_dict, naive_stochastic_beam_search, stochastic_beam_search, sampling_topk, sampling_temperature)
 
@@ -405,6 +408,7 @@ class SequenceGenerator(object):
                         cand_indices[partial_prefix_mask] = partial_indices[partial_prefix_mask]
                         cand_beams[partial_prefix_mask] = partial_beams[partial_prefix_mask]
                 else:
+                    print(step)
                     cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
                         step,
                         lprobs.view(bsz, -1, self.vocab_size),
@@ -418,7 +422,7 @@ class SequenceGenerator(object):
                 # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
                 # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
                 # but this way we can deal with varying numbers of samples per sequence easily
-                if isinstance(self.search, search.BeamSearch) and self.search.stochastic:
+                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS):
                     # For beam search, we simply stop here with the k samples we have
                     # Sort by the perturbed log-probability
                     torch.sort(

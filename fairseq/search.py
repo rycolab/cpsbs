@@ -60,6 +60,95 @@ class Search(object):
         self.src_lengths = src_lengths
 
 
+class CPS(Search):
+    def __init__(self, tgt_dict, sampling_topk=-1, sampling_temperature=1.0):
+        super().__init__(tgt_dict)
+        self.sampling_topk = sampling_topk
+        assert self.sampling_topk == -1
+        self.sampling_temperature = sampling_temperature
+
+    def _initialize_dp(self, bsz, k, n):
+        self.subset_sum_product_probs = torch.zeros((bsz, k + 1, n + 1))
+        self.subset_sum_product_probs[:, 0, :] = 1
+
+    def _calc_normalization(self, p, k, j):
+        n = len(p) - 1
+
+        for r in range(1, k + 1):
+            for i in range(1, n + 1):
+                self.subset_sum_product_probs[j, r, i] = torch.add(torch.mul(self.subset_sum_product_probs[j, r - 1, i - 1], p[i]), self.subset_sum_product_probs[j, r, i - 1])
+        normalization_factor = self.subset_sum_product_probs[j, k, n]
+        return normalization_factor
+
+    def _calc_inclusion_probs(self, p, k, j):
+        n = len(p) - 1
+        dp = torch.zeros(n + 1)
+        remaining_subsetsum_product_probs = torch.zeros((k + 2, n + 2))
+        remaining_subsetsum_product_probs[k, :] = 1
+        for r in range(k, 0, -1):
+            for i in range(n, 0, -1):
+                dp[i] += self.subset_sum_product_probs[r - 1, i - 1] * remaining_subsetsum_product_probs[r, i + 1]
+                remaining_subsetsum_product_probs[r, i] = remaining_subsetsum_product_probs[r + 1, i + 1] * p[i] + \
+                                                          remaining_subsetsum_product_probs[r, i + 1]
+        p_cliped = p[1:]
+        dp_cliped = dp[1:]
+        inclusion_probs = p_cliped * dp_cliped / self.subset_sum_product_probs[k, n]
+        return inclusion_probs
+
+    def cps_sample(self, p, k, bsz):
+        p = torch.cat((torch.zeros(bsz, 1), p), dim=1)
+        n = p.size()[1] - 1
+        k = min(n, k)
+
+        self._initialize_dp(bsz, k, n)
+        samples_idx = torch.zeros([bsz, k], dtype=torch.int64)
+        for j in range(bsz):
+            _ = self._calc_normalization(p[j, :], k, j)
+            to_pick_number = k
+            for i in range(n, 0, -1):
+                if torch.mul(torch.rand(1), self.subset_sum_product_probs[j, to_pick_number, i]) <= torch.mul(p[j, i], self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]):
+                    samples_idx[j, k - to_pick_number - 1] = (i - 1)
+                    to_pick_number -= 1
+                    if to_pick_number == 0: break
+        # inclusion_probs = self._calc_inclusion_probs(p, k)
+        return torch.gather(p, -1, samples_idx), samples_idx
+
+    def step(self, step, lprobs, scores, log_ps, log_ps_t):
+        super()._init_buffers(lprobs)
+        bsz, beam_size, vocab_size = lprobs.size()
+
+        lprobs_t = lprobs.clone()
+        if self.sampling_temperature != 1.0:
+            lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
+
+        if step == 0:
+            # at the first step all hypotheses are equally likely, so use
+            # only the first beam
+            lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
+            lprobs = lprobs[:, ::beam_size, :].contiguous()
+
+            cand_scores = lprobs_t
+        else:
+            # make probs contain cumulative scores for each hypothesis
+            lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
+            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
+
+            cand_scores = lprobs_t
+
+        self.scores_buf, self.indices_buf = self.cps_sample(torch.exp(cand_scores.view(bsz, -1)), beam_size*2, bsz)
+
+        # Gather cumulative
+        self.log_ps_buf = torch.gather(lprobs.view(bsz, -1), -1, self.indices_buf)
+
+        torch.gather(
+            lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+        )
+
+        torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
+        self.indices_buf.fmod_(vocab_size)
+        return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
+
+
 class BeamSearch(Search):
 
     def __init__(self, tgt_dict, naive_stochastic=False, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
