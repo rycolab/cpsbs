@@ -80,7 +80,7 @@ class CPS(Search):
     def _initialize_dp(self, bsz, k, n):
         self.subset_sum_product_probs = np.zeros((bsz, k + 1, n + 1))
         self.subset_sum_product_probs[:, 0, :] = 1
-        print(self.subset_sum_product_probs.size())
+        print(self.subset_sum_product_probs.shape)
 
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
