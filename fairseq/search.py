@@ -105,7 +105,7 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, p, k, bsz):
-        torch.cat((torch.zeros(bsz, 1), p), dim=1, out=self.p)
+        torch.cat((torch.zeros(bsz, 1).to(device=p.device), p), dim=1, out=self.p)
         n = self.p.size()[1] - 1
         k = min(n, k)
 
