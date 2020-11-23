@@ -83,11 +83,13 @@ class CPS(Search):
 
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
+        print("start normalization")
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
                 self.subset_sum_product_probs[j, r, i] = torch.add(torch.mul(self.subset_sum_product_probs[j, r - 1, i - 1], p[i]), self.subset_sum_product_probs[j, r, i - 1])
         normalization_factor = self.subset_sum_product_probs[j, k, n]
+        print("end normalization")
         return normalization_factor
 
     def _calc_inclusion_probs(self, p, k, j):
@@ -112,6 +114,7 @@ class CPS(Search):
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+        print("start sample")
         for j in range(bsz):
             _ = self._calc_normalization(self.p[j, :], k, j)
             to_pick_number = k
@@ -120,6 +123,7 @@ class CPS(Search):
                     self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
                     if to_pick_number == 0: break
+        print("end sample")
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         return torch.gather(p, -1, self.samples_idx), self.samples_idx
 
