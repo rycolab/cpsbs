@@ -120,7 +120,7 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         print("start sample")
-        self._calc_normalization(self.p[0, :], k, j)
+        self._calc_normalization(self.p[0, :], k, 0)
         self.p = self.p.detach().numpy()
         self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
 
