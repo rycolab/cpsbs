@@ -120,10 +120,9 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         print("start sample")
+        import time
+        time_start = time.time()
         self._calc_normalization(self.p[0, :], k, 0)
-        self.p = self.p.detach().numpy()
-        self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
-
         to_pick_number = k
         for i in range(n, 0, -1):
             if torch.rand(1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
@@ -131,6 +130,7 @@ class CPS(Search):
                 to_pick_number -= 1
                 if to_pick_number == 0: break
         print("end sample")
+        print("run % .2f" % (time.time() - time_start))
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         return torch.gather(p, -1, self.samples_idx), self.samples_idx
 
