@@ -116,7 +116,7 @@ class CPS(Search):
             to_pick_number = k
             for i in range(n, 0, -1):
                 if torch.mul(torch.rand(1), self.subset_sum_product_probs[j, to_pick_number, i]) <= torch.mul(self.p[j, i], self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]):
-                    samples_idx[j, k - to_pick_number - 1] = (i - 1)
+                    self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
                     if to_pick_number == 0: break
         # inclusion_probs = self._calc_inclusion_probs(p, k)
