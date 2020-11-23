@@ -86,13 +86,18 @@ class CPS(Search):
         print("start normalization")
         print(n)
         print(k)
+        self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
+        self.p_rolled = torch.roll(p, -1, 0)
+        torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
+        torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
 
-        for r in range(1, k + 1):
-            for i in range(1, n + 1):
-                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
-        normalization_factor = self.subset_sum_product_probs[j, k, n]
+        # for r in range(1, k + 1):
+        #     for i in range(1, n + 1):
+        #         self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
+        # normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
-        return normalization_factor
+        # return normalization_factor
+        return
 
     def _calc_inclusion_probs(self, p, k, j):
         n = len(p) - 1
@@ -105,12 +110,12 @@ class CPS(Search):
                 self.remaining_subsetsum_product_probs[r, i] = self.remaining_subsetsum_product_probs[r + 1, i + 1] * p[i] + \
                                                           self.remaining_subsetsum_product_probs[r, i + 1]
         p_cliped = p[1:]
-        dp_cliped = dp[1:]
+        dp_cliped = self.dp[1:]
         inclusion_probs = p_cliped * dp_cliped / self.subset_sum_product_probs[k, n]
         return inclusion_probs
 
     def cps_sample(self, p, k, bsz):
-        torch.cat((torch.zeros(bsz, 1).to(device=p.device), p), dim=1, out=self.p)
+        torch.cat((torch.ones(bsz, 1).to(device=p.device), p), dim=1, out=self.p)
         n = self.p.size()[1] - 1
         k = min(n, k)
 
