@@ -67,8 +67,17 @@ class CPS(Search):
         assert self.sampling_topk == -1
         self.sampling_temperature = sampling_temperature
 
+    def _init_buffers(self, t):
+        super()._init_buffers(t)
+
+        self.remaining_subsetsum_product_probs = torch.FloatTensor().to(device=t.device)
+        self.subset_sum_product_probs = torch.FloatTensor().to(device=t.device)
+        self.dp = torch.FloatTensor().to(device=t.device)
+        self.p = torch.FloatTensor().to(device=t.device)
+        self.samples_idx = torch.LongTensor().to(device=t.device)
+
     def _initialize_dp(self, bsz, k, n):
-        self.subset_sum_product_probs = torch.zeros((bsz, k + 1, n + 1))
+        torch.zeros((bsz, k + 1, n + 1), out=self.subset_sum_product_probs)
         self.subset_sum_product_probs[:, 0, :] = 1
 
     def _calc_normalization(self, p, k, j):
@@ -82,36 +91,36 @@ class CPS(Search):
 
     def _calc_inclusion_probs(self, p, k, j):
         n = len(p) - 1
-        dp = torch.zeros(n + 1)
-        remaining_subsetsum_product_probs = torch.zeros((k + 2, n + 2))
-        remaining_subsetsum_product_probs[k, :] = 1
+        torch.zeros((n + 1), out=self.dp)
+        torch.zeros((k + 2, n + 2), out=self.remaining_subsetsum_product_probs)
+        self.remaining_subsetsum_product_probs[k, :] = 1
         for r in range(k, 0, -1):
             for i in range(n, 0, -1):
-                dp[i] += self.subset_sum_product_probs[r - 1, i - 1] * remaining_subsetsum_product_probs[r, i + 1]
-                remaining_subsetsum_product_probs[r, i] = remaining_subsetsum_product_probs[r + 1, i + 1] * p[i] + \
-                                                          remaining_subsetsum_product_probs[r, i + 1]
+                self.dp[i] += self.subset_sum_product_probs[r - 1, i - 1] * self.remaining_subsetsum_product_probs[r, i + 1]
+                self.remaining_subsetsum_product_probs[r, i] = self.remaining_subsetsum_product_probs[r + 1, i + 1] * p[i] + \
+                                                          self.remaining_subsetsum_product_probs[r, i + 1]
         p_cliped = p[1:]
         dp_cliped = dp[1:]
         inclusion_probs = p_cliped * dp_cliped / self.subset_sum_product_probs[k, n]
         return inclusion_probs
 
     def cps_sample(self, p, k, bsz):
-        p = torch.cat((torch.zeros(bsz, 1), p), dim=1)
-        n = p.size()[1] - 1
+        torch.cat((torch.zeros(bsz, 1), p), dim=1, out=self.p)
+        n = self.p.size()[1] - 1
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
-        samples_idx = torch.zeros([bsz, k], dtype=torch.int64)
+        torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         for j in range(bsz):
-            _ = self._calc_normalization(p[j, :], k, j)
+            _ = self._calc_normalization(self.p[j, :], k, j)
             to_pick_number = k
             for i in range(n, 0, -1):
-                if torch.mul(torch.rand(1), self.subset_sum_product_probs[j, to_pick_number, i]) <= torch.mul(p[j, i], self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]):
+                if torch.mul(torch.rand(1), self.subset_sum_product_probs[j, to_pick_number, i]) <= torch.mul(self.p[j, i], self.subset_sum_product_probs[j, to_pick_number - 1, i - 1]):
                     samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
                     if to_pick_number == 0: break
         # inclusion_probs = self._calc_inclusion_probs(p, k)
-        return torch.gather(p, -1, samples_idx), samples_idx
+        return torch.gather(p, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
         super()._init_buffers(lprobs)
