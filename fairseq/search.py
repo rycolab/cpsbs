@@ -87,7 +87,7 @@ class CPS(Search):
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                self.subset_sum_product_probs[j, r, i] = torch.add(torch.mul(self.subset_sum_product_probs[j, r - 1, i - 1], p[i]), self.subset_sum_product_probs[j, r, i - 1])
+                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
         normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
         return normalization_factor
