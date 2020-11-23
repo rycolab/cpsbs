@@ -119,14 +119,18 @@ class CPS(Search):
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
-        self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
-        self.p = self.p.detach().numpy()
+
         import numpy as np
 
         print("start sample")
         import time
         time_start = time.time()
         self._calc_normalization(self.p[0, :], k, 0)
+
+        self.subset_sum_product_probs = self.subset_sum_product_probs.detach().numpy()
+        self.p = self.p.detach().numpy()
+
+
         to_pick_number = k
         for i in range(n, 0, -1):
             if np.random.uniform(0, 1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
