@@ -123,7 +123,7 @@ class CPS(Search):
         return torch.gather(p, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
-        super()._init_buffers(lprobs)
+        self._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
 
         lprobs_t = lprobs.clone()
