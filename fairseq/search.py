@@ -92,7 +92,7 @@ class CPS(Search):
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i] + self.subset_sum_product_probs[j, r, i - 1]
+                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i-1] + self.subset_sum_product_probs[j, r, i - 1]
         normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
         # return normalization_factor
@@ -115,11 +115,8 @@ class CPS(Search):
 
     def cps_sample(self, p, k, bsz):
         self.p = p.detach().numpy()
-        print(self.p)
-        self.p = np.concatenate((np.ones((bsz, 1)), self.p), axis=1)
-        print(self.p)
+        # self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         print(self.p[0, :])
-        print(self.p[0])
         print("====")
         n = self.p.shape[1] - 1
         k = min(n, k)
@@ -134,7 +131,7 @@ class CPS(Search):
 
         to_pick_number = k
         for i in range(n, 0, -1):
-            if np.random.uniform(0, 1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
+            if np.random.uniform(0, 1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i-1] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
                 self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
                 to_pick_number -= 1
                 if to_pick_number == 0: break
