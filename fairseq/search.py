@@ -78,12 +78,46 @@ class CPS(Search):
         self.samples_idx = torch.LongTensor().to(device=t.device)
 
     def _initialize_dp(self, bsz, k, n):
-        self.subset_sum_product_probs = np.zeros((bsz, k + 1, n + 1))
-        self.subset_sum_product_probs[:, 0, :] = 1
+        self.subset_sum_product_probs = np.full((bsz, k+1,n+1), -np.inf)
+        self.subset_sum_product_probs[:, 0, :] = 0.
 
-    def _calc_normalization(self, p, k, j):
-        print(p)
-        n = len(p) - 1
+    def log1pexp(self, x):
+        """
+        Numerically stable implementation of log(1+exp(x)) aka softmax(0,x).
+        -log1pexp(-x) is log(sigmoid(x))
+        Source:
+        http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
+        """
+        if x <= -37:
+            return np.exp(x)
+        elif -37 <= x <= 18:
+            return np.log1p(np.exp(x))
+        elif 18 < x <= 33.3:
+            return x + np.exp(-x)
+        else:
+            return x
+
+    def log_add(self, x, y):
+        """
+        Addition of 2 values in log space.
+        Need separate checks for inf because inf-inf=nan
+        """
+        if x == -np.inf:
+            return y
+        elif y == -np.inf:
+            return x
+        else:
+            if y <= x:
+                d = y - x
+                r = x
+            else:
+                d = x - y
+                r = y
+            return r + self.log1pexp(d)
+
+    def _calc_normalization(self, logp, k, j):
+        print(logp)
+        n = len(logp) - 1
         print("start normalization")
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
         # self.p_rolled = torch.roll(p, -1, 0)
@@ -92,8 +126,10 @@ class CPS(Search):
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i-1] + self.subset_sum_product_probs[j, r, i - 1]
-        normalization_factor = self.subset_sum_product_probs[j, k, n]
+                interm = logp[i - 1] + self.subset_sum_product_probs[j, r - 1, i - 1]
+                self.subset_sum_product_probs[j, r, i] = self.log_add(self.subset_sum_product_probs[j, r, i - 1], interm)
+        #     self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i-1] + self.subset_sum_product_probs[j, r, i - 1]
+        # normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
         # return normalization_factor
         return
@@ -113,12 +149,12 @@ class CPS(Search):
         inclusion_probs = p_cliped * dp_cliped / self.subset_sum_product_probs[k, n]
         return inclusion_probs
 
-    def cps_sample(self, p, k, bsz):
-        self.p = p.detach().numpy()
+    def cps_sample(self, logp, k, bsz):
+        self.logp = logp.detach().numpy()
         # self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
-        print(self.p[0, :])
+        print(self.logp[0, :])
         print("====")
-        n = self.p.shape[1] - 1
+        n = self.logp.shape[1]
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
@@ -127,11 +163,13 @@ class CPS(Search):
         print("start sample")
         import time
         time_start = time.time()
-        self._calc_normalization(self.p[0, :], k, 0)
+        self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
         for i in range(n, 0, -1):
-            if np.random.uniform(0, 1) * self.subset_sum_product_probs[0, to_pick_number, i] <= self.p[0, i-1] * self.subset_sum_product_probs[0, to_pick_number - 1, i - 1]:
+            u = np.random.uniform()
+            thresh = self.logp[0, i - 1] + self.subset_sum_product_probs[0, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[0, to_pick_number, i]
+            if np.log(u) < thresh:
                 self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
                 to_pick_number -= 1
                 if to_pick_number == 0: break
@@ -139,7 +177,7 @@ class CPS(Search):
         print("run % .2f" % (time.time() - time_start))
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         print(self.samples_idx)
-        return torch.gather(p, -1, self.samples_idx), self.samples_idx
+        return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
         self._init_buffers(lprobs)
@@ -161,7 +199,7 @@ class CPS(Search):
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
-        self.scores_buf, self.indices_buf = self.cps_sample(torch.exp(lprobs_t.view(bsz, -1)), beam_size*2, bsz)
+        self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size*2, bsz)
 
         # Gather cumulative
         self.log_ps_buf = torch.gather(lprobs.view(bsz, -1), -1, self.indices_buf)
