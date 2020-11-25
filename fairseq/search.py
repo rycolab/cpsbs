@@ -116,7 +116,7 @@ class CPS(Search):
     def cps_sample(self, p, k, bsz):
         self.p = p.detach().numpy()
         print(self.p)
-        self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
+        self.p = np.concatenate((np.ones((bsz, 1)), self.p), axis=1)
         print(self.p)
         print(self.p[0, :])
         print(self.p[0])
