@@ -165,6 +165,8 @@ class CPS(Search):
         import time
         time_start = time.time()
         self._calc_normalization(self.logp[0, :], k, 0)
+        print(self.subset_sum_product_probs)
+        print("-----")
 
         to_pick_number = k
         for i in range(n, 0, -1):
