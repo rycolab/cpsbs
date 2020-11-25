@@ -126,7 +126,7 @@ class CPS(Search):
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                interm = logp[i - 1] + self.subset_sum_product_probs[j, r - 1, i - 1]
+                interm = self.log_add(logp[i - 1], self.subset_sum_product_probs[j, r - 1, i - 1])
                 self.subset_sum_product_probs[j, r, i] = self.log_add(self.subset_sum_product_probs[j, r, i - 1], interm)
         #     self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i-1] + self.subset_sum_product_probs[j, r, i - 1]
         # normalization_factor = self.subset_sum_product_probs[j, k, n]
@@ -170,7 +170,7 @@ class CPS(Search):
 
         to_pick_number = k
         for i in range(n, 0, -1):
-            u = np.random.uniform()
+            u = np.random.uniform(0, 1)
             thresh = self.logp[0, i - 1] + self.subset_sum_product_probs[0, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[0, to_pick_number, i]
             if np.log(u) < thresh:
                 self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
