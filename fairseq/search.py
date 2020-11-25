@@ -80,7 +80,6 @@ class CPS(Search):
     def _initialize_dp(self, bsz, k, n):
         self.subset_sum_product_probs = np.zeros((bsz, k + 1, n + 1))
         self.subset_sum_product_probs[:, 0, :] = 1
-        print(self.subset_sum_product_probs.shape)
 
     def _calc_normalization(self, p, k, j):
         n = len(p) - 1
@@ -115,6 +114,7 @@ class CPS(Search):
 
     def cps_sample(self, p, k, bsz):
         self.p = p.detach().numpy()
+        print(self.p)
         self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         n = self.p.shape[1] - 1
         k = min(n, k)
@@ -155,12 +155,11 @@ class CPS(Search):
 
             # cand_scores = lprobs_t
 
-        cand_scores = lprobs_t
             # make probs contain cumulative scores for each hypothesis
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
-        self.scores_buf, self.indices_buf = self.cps_sample(torch.exp(cand_scores.view(bsz, -1)), beam_size*2, bsz)
+        self.scores_buf, self.indices_buf = self.cps_sample(torch.exp(lprobs_t.view(bsz, -1)), beam_size*2, bsz)
 
         # Gather cumulative
         self.log_ps_buf = torch.gather(lprobs.view(bsz, -1), -1, self.indices_buf)
@@ -171,6 +170,7 @@ class CPS(Search):
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
+        print(self.indices_buf)
         return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
