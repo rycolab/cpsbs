@@ -153,6 +153,7 @@ class CPS(Search):
         self.logp = logp.detach().numpy()
         # self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         print(self.logp[0, :])
+        print(self.logp[0])
         print("====")
         n = self.logp.shape[1]
         k = min(n, k)
