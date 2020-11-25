@@ -82,6 +82,7 @@ class CPS(Search):
         self.subset_sum_product_probs[:, 0, :] = 1
 
     def _calc_normalization(self, p, k, j):
+        print(p)
         n = len(p) - 1
         print("start normalization")
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
@@ -114,7 +115,6 @@ class CPS(Search):
 
     def cps_sample(self, p, k, bsz):
         self.p = p.detach().numpy()
-        print(self.p)
         self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         n = self.p.shape[1] - 1
         k = min(n, k)
