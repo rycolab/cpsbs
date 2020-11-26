@@ -177,11 +177,11 @@ class CPS(Search):
         print(lprobs.size())
         print(self.log_ps_buf.size())
         torch.gather(
-            self.log_ps_buf, -1, self.indices_buf, out=self.log_ps_buf
+            self.log_ps_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
 
         torch.gather(
-            self.log_ps_t_buf, -1, self.indices_buf, out=self.log_ps_t_buf
+            self.log_ps_t_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
