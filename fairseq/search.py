@@ -159,14 +159,16 @@ class CPS(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            # cand_scores = lprobs_t
+            self.log_ps_buf = lprobs
+            self.log_ps_t_buf = lprobs_t
 
             # make probs contain cumulative scores for each hypothesis
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
-        self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
-        self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
+        else:
+            self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
+            self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
         self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size*2, bsz)
 
