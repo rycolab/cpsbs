@@ -140,8 +140,8 @@ class CPS(Search):
         print("end sample")
         print("run % .2f" % (time.time() - time_start))
         # inclusion_probs = self._calc_inclusion_probs(p, k)
-        print("log probs of selected samples:")
-        print(torch.gather(logp, -1, self.samples_idx))
+        print("selected samples")
+        print(self.samples_idx)
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
