@@ -199,6 +199,10 @@ class BeamSearch(Search):
         if self.sampling_temperature != 1.0:
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
 
+        k = beam_size*2
+        for elem in lprobs_t[0,:].argsort()[-k:][::-1]:
+            print(elem)
+
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
             # only the first beam
