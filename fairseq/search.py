@@ -121,8 +121,9 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        # for elem in self.logp[0,:].argsort()[-k:][::-1]:
-        #     print(elem)
+        print("index in sampling")
+        for elem in self.logp[0,:].argsort()[-k:][::-1]:
+            print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
@@ -148,7 +149,7 @@ class CPS(Search):
 
         k = beam_size * 2
         sco, ind = torch.topk(lprobs_t.view(bsz, -1), k=k)
-        print(sco)
+        print("index before sampling")
         print(ind)
 
         if step == 0:
