@@ -121,8 +121,8 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        for elem in self.logp[0,:].argsort()[-k:][::-1]:
-            print(elem)
+        # for elem in self.logp[0,:].argsort()[-k:][::-1]:
+        #     print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
@@ -139,12 +139,17 @@ class CPS(Search):
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
-        self._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
+        self._init_buffers(lprobs)
 
         lprobs_t = lprobs.clone()
         if self.sampling_temperature != 1.0:
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
+
+        k = beam_size * 2
+        sco, ind = torch.topk(lprobs_t.view(bsz, -1), k=k)
+        print(sco)
+        print(ind)
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
