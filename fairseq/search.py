@@ -200,8 +200,9 @@ class BeamSearch(Search):
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
 
         k = beam_size*2
-        for elem in lprobs_t[0,:].argsort()[-k:][::-1]:
-            print(elem)
+        sco, ind = torch.topk(lprobs_t.view(bsz, -1), k=k)
+        print(sco)
+        print(ind)
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
