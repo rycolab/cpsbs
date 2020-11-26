@@ -229,6 +229,7 @@ class BeamSearch(Search):
             ),
             out=(self.scores_buf, self.indices_buf),
         )
+        print(self.indices_buf)
 
         # Gather cumulative
         torch.gather(
