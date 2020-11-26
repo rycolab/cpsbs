@@ -125,7 +125,7 @@ class CPS(Search):
         import time
         time_start = time.time()
         print("top log probs")
-        for elem in self.logp.argsort()[-k:][::-1]:
+        for elem in self.logp[0,:].argsort()[-k:][::-1]:
             print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
