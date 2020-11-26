@@ -152,8 +152,8 @@ class CPS(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            self.log_ps_buf = lprobs
-            self.log_ps_t_buf = lprobs_t
+            self.log_ps_buf = lprobs.clone()
+            self.log_ps_t_buf = lprobs_t.clone()
 
             # make probs contain cumulative scores for each hypothesis
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
