@@ -121,8 +121,8 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        # for elem in self.logp[0,:].argsort()[-k:][::-1]:
-        #     print(elem)
+        for elem in self.logp[0,:].argsort()[-k:][::-1]:
+            print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
