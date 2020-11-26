@@ -174,6 +174,7 @@ class CPS(Search):
 
         # Gather cumulative
 
+        print(self.log_ps_buf.size())
         torch.gather(
             self.log_ps_buf, -1, self.indices_buf, out=self.log_ps_buf
         )
