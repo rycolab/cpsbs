@@ -165,13 +165,19 @@ class CPS(Search):
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
+        self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
+        self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
+
         self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size*2, bsz)
 
         # Gather cumulative
-        self.log_ps_buf = torch.gather(lprobs.view(bsz, -1), -1, self.indices_buf)
 
         torch.gather(
-            lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+            self.log_ps_buf, -1, self.indices_buf, out=self.log_ps_buf
+        )
+
+        torch.gather(
+            self.log_ps_t_buf, -1, self.indices_buf, out=self.log_ps_t_buf
         )
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
