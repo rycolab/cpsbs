@@ -83,7 +83,6 @@ class CPS(Search):
         self.subset_sum_product_probs[:, 0, :] = 0.
 
     def _calc_normalization(self, logp, k, j):
-        print(logp)
         n = len(logp)
         print("start normalization")
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
@@ -116,9 +115,6 @@ class CPS(Search):
 
     def cps_sample(self, logp, k, bsz):
         self.logp = logp.detach().numpy()
-        # self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
-        print(self.logp[0, :])
-        print("====")
         n = self.logp.shape[1]
         k = min(n, k)
 
@@ -128,15 +124,15 @@ class CPS(Search):
         print("start sample")
         import time
         time_start = time.time()
+        print("top log probs")
+        print(self.logp.argsort()[-k:][::-1])
         self._calc_normalization(self.logp[0, :], k, 0)
-        print(self.subset_sum_product_probs)
-        print("-----")
 
         to_pick_number = k
         for i in range(n, 0, -1):
             u = np.random.uniform(0, 1)
             thresh = self.logp[0, i - 1] + self.subset_sum_product_probs[0, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[0, to_pick_number, i]
-            if np.log(u) <= thresh:
+            if np.log(u) < thresh:
                 self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
                 to_pick_number -= 1
                 if to_pick_number == 0:
@@ -144,7 +140,6 @@ class CPS(Search):
         print("end sample")
         print("run % .2f" % (time.time() - time_start))
         # inclusion_probs = self._calc_inclusion_probs(p, k)
-        print(self.samples_idx)
         print("log probs of selected samples:")
         print(torch.gather(logp, -1, self.samples_idx))
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
