@@ -422,7 +422,7 @@ class SequenceGenerator(object):
                 # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
                 # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
                 # but this way we can deal with varying numbers of samples per sequence easily
-                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS):
+                if (isinstance(self.search, search.BeamSearch)) and self.search.stochastic:
                     # For beam search, we simply stop here with the k samples we have
                     # Sort by the perturbed log-probability
                     torch.sort(
