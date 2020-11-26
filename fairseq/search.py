@@ -81,43 +81,9 @@ class CPS(Search):
         self.subset_sum_product_probs = np.zeros((bsz, k+1, n+1))
         self.subset_sum_product_probs[:, 0, :] = 1.
 
-    # def log1pexp(self, x):
-    #     """
-    #     Numerically stable implementation of log(1+exp(x)) aka softmax(0,x).
-    #     -log1pexp(-x) is log(sigmoid(x))
-    #     Source:
-    #     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
-    #     """
-    #     if x <= -37:
-    #         return np.exp(x)
-    #     elif -37 <= x <= 18:
-    #         return np.log1p(np.exp(x))
-    #     elif 18 < x <= 33.3:
-    #         return x + np.exp(-x)
-    #     else:
-    #         return x
-    #
-    # def log_add(self, x, y):
-    #     """
-    #     Addition of 2 values in log space.
-    #     Need separate checks for inf because inf-inf=nan
-    #     """
-    #     if x == -np.inf:
-    #         return y
-    #     elif y == -np.inf:
-    #         return x
-    #     else:
-    #         if y <= x:
-    #             d = y - x
-    #             r = x
-    #         else:
-    #             d = x - y
-    #             r = y
-    #         return r + self.log1pexp(d)
-
     def _calc_normalization(self, p, k, j):
         print(p)
-        n = len(p) - 1
+        n = len(p)
         print("start normalization")
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
         # self.p_rolled = torch.roll(p, -1, 0)
@@ -126,10 +92,7 @@ class CPS(Search):
 
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                # interm = self.log_add(logp[i - 1], self.subset_sum_product_probs[j, r - 1, i - 1])
-                # self.subset_sum_product_probs[j, r, i] = self.log_add(self.subset_sum_product_probs[j, r, i - 1], interm)
                 self.subset_sum_product_probs[j, r, i] = self.subset_sum_product_probs[j, r - 1, i - 1]*p[i-1] + self.subset_sum_product_probs[j, r, i - 1]
-        normalization_factor = self.subset_sum_product_probs[j, k, n]
         print("end normalization")
         # return normalization_factor
         return
@@ -150,7 +113,7 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, p, k, bsz):
-        self.p = np.exp(p.detach().cpu().numpy())
+        self.p = np.exp(p.detach().numpy())
         # self.p = np.concatenate((np.zeros((bsz, 1)), self.p), axis=1)
         print(self.p[0, :])
         print("====")
