@@ -121,12 +121,8 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        print("start sample")
-        import time
-        time_start = time.time()
-        print("top log probs")
-        for elem in self.logp[0,:].argsort()[-k:][::-1]:
-            print(elem)
+        # for elem in self.logp[0,:].argsort()[-k:][::-1]:
+        #     print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
@@ -138,11 +134,8 @@ class CPS(Search):
                 to_pick_number -= 1
                 if to_pick_number == 0:
                     break
-        print("end sample")
-        print("run % .2f" % (time.time() - time_start))
+
         # inclusion_probs = self._calc_inclusion_probs(p, k)
-        print("selected samples")
-        print(self.samples_idx)
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
@@ -174,8 +167,6 @@ class CPS(Search):
 
         # Gather cumulative
 
-        print(lprobs.size())
-        print(self.log_ps_buf.size())
         torch.gather(
             self.log_ps_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
