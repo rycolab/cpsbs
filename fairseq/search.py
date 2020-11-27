@@ -121,17 +121,18 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        self._calc_normalization(self.logp[0, :], k, 0)
+        for j in range(bsz):
+            self._calc_normalization(self.logp[0, :], k, j)
+            to_pick_number = k
 
-        to_pick_number = k
-        for i in range(n, 0, -1):
-            u = np.random.uniform(0, 1)
-            thresh = self.logp[0, i - 1] + self.subset_sum_product_probs[0, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[0, to_pick_number, i]
-            if np.log(u) < thresh:
-                self.samples_idx[0, k - to_pick_number - 1] = (i - 1)
-                to_pick_number -= 1
-                if to_pick_number == 0:
-                    break
+            for i in range(n, 0, -1):
+                u = np.random.uniform(0, 1)
+                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
+                if np.log(u) < thresh:
+                    self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
+                    to_pick_number -= 1
+                    if to_pick_number == 0:
+                        break
 
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
@@ -143,11 +144,6 @@ class CPS(Search):
         lprobs_t = lprobs.clone()
         if self.sampling_temperature != 1.0:
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
-
-        k = beam_size * 2
-        sco, ind = torch.topk(lprobs_t.view(bsz, -1), k=k)
-        print("index before sampling")
-        print(ind)
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -167,7 +163,6 @@ class CPS(Search):
             self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
         self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
-        print(self.indices_buf)
 
         # Gather cumulative
 
@@ -202,11 +197,6 @@ class BeamSearch(Search):
         if self.sampling_temperature != 1.0:
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
 
-        k = beam_size*2
-        sco, ind = torch.topk(lprobs_t.view(bsz, -1), k=k)
-        print(sco)
-        print(ind)
-
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
             # only the first beam
@@ -238,7 +228,6 @@ class BeamSearch(Search):
             ),
             out=(self.scores_buf, self.indices_buf),
         )
-        print(self.indices_buf)
 
         # Gather cumulative
         torch.gather(
