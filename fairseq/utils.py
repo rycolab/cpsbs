@@ -13,7 +13,6 @@ import re
 import sys
 import traceback
 import warnings
-import numpy as np
 
 import torch
 import torch.nn.functional as F
@@ -480,11 +479,11 @@ def log1pexp(x):
     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
     """
     if x <= -37:
-        return np.exp(x)
+        return torch.exp(x)
     elif -37 <= x <= 18:
-        return np.log1p(np.exp(x))
+        return torch.log1p(torch.exp(x))
     elif 18 < x <= 33.3:
-        return x + np.exp(-x)
+        return x + torch.exp(-x)
     else:
         return x
 
@@ -494,9 +493,9 @@ def log_add(x, y):
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
     """
-    if x == -np.inf:
+    if x == -float("Inf"):
         return y
-    elif y == -np.inf:
+    elif y == -float("Inf"):
         return x
     else:
         if y <= x:

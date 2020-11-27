@@ -11,7 +11,6 @@ import torch
 import torch.nn.functional as F
 
 from fairseq.gumbel import gumbel_like, gumbel_with_maximum
-import numpy as np
 from fairseq.utils import log_add
 
 
@@ -73,13 +72,13 @@ class CPS(Search):
         super()._init_buffers(t)
 
         self.remaining_subsetsum_product_probs = torch.FloatTensor().to(device=t.device)
-        self.subset_sum_product_probs = None
+        self.subset_sum_product_probs = torch.FloatTensor().to(device=t.device)
         self.dp = torch.FloatTensor().to(device=t.device)
-        self.p = None
+        self.p = torch.FloatTensor().to(device=t.device)
         self.samples_idx = torch.LongTensor().to(device=t.device)
 
     def _initialize_dp(self, bsz, k, n):
-        self.subset_sum_product_probs = np.full((bsz, k+1, n+1), -np.inf)
+        self.subset_sum_product_probs = torch.full((bsz, k+1, n+1), -float("Inf"))
         self.subset_sum_product_probs[:, 0, :] = 0.
 
     def _calc_normalization(self, logp, k, j):
@@ -114,21 +113,20 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
-        self.logp = logp.detach().numpy()
-        n = self.logp.shape[1]
+        n = logp.size()[1]
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
         for j in range(bsz):
-            self._calc_normalization(self.logp[0, :], k, j)
+            self._calc_normalization(logp[j, :], k, j)
             to_pick_number = k
 
             for i in range(n, 0, -1):
-                u = np.random.uniform(0, 1)
-                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
-                if np.log(u) < thresh:
+                u = torch.rand(1)
+                thresh = logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
+                if torch.log(u) < thresh:
                     self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
                     if to_pick_number == 0:
