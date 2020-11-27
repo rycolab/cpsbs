@@ -409,6 +409,8 @@ class SequenceGenerator(object):
                         cand_beams[partial_prefix_mask] = partial_beams[partial_prefix_mask]
                 else:
                     print("{}/{}".format(step, max_len))
+                    if step > 1:
+                        break
                     cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
                         step,
                         lprobs.view(bsz, -1, self.vocab_size),
