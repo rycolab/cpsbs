@@ -335,6 +335,7 @@ class SequenceGenerator(object):
                 model.reorder_incremental_state(reorder_state)
                 model.reorder_encoder_out(encoder_outs, reorder_state)
 
+            print(tokens[:, :step + 1])
             lprobs, avg_attn_scores = model.forward_decoder(tokens[:, :step + 1], encoder_outs)
 
             lprobs[:, self.pad] = -math.inf  # never select pad

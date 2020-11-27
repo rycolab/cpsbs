@@ -121,9 +121,6 @@ class CPS(Search):
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        print("index in sampling")
-        for elem in self.logp[0,:].argsort()[-k:][::-1]:
-            print(elem)
         self._calc_normalization(self.logp[0, :], k, 0)
 
         to_pick_number = k
@@ -170,6 +167,7 @@ class CPS(Search):
             self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
         self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size*2, bsz)
+        print(self.indices_buf)
 
         # Gather cumulative
 
@@ -183,7 +181,6 @@ class CPS(Search):
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
-        print(self.indices_buf)
         return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
