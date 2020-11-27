@@ -166,7 +166,7 @@ class CPS(Search):
             self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
             self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
-        self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size*2, bsz)
+        self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
         print(self.indices_buf)
 
         # Gather cumulative
