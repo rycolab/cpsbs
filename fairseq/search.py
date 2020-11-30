@@ -136,6 +136,7 @@ class CPS(Search):
                         break
 
             pr.disable()
+            pr.print_stats()
             print("Whole Sampling stat:")
 
 
