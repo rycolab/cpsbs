@@ -499,8 +499,9 @@ def log_add(x, y):
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
     """
-    result = np.copy(x)
+    result = np.zeros(x.shape)
     result[x == -np.inf] = y[x == -np.inf]
+    result[y == -np.inf] = x[y == -np.inf]
     result[y <= x] = x[y <= x] + log1pexp((y-x)[y <= x])
     result[y > x] = y[y > x] + log1pexp((x-y)[y > x])
     # if x == -np.inf:
