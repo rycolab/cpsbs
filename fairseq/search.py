@@ -115,20 +115,20 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
-        logp = logp.detach().numpy()
-        n = logp.shape[1]
+        self.logp = logp.detach().numpy()
+        n = self.logp.shape[1]
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
         for j in range(bsz):
-            self._calc_normalization(logp[j, :], k, j)
+            self._calc_normalization(self.logp[j, :], k, j)
             to_pick_number = k
 
             for i in range(n, 0, -1):
                 u = torch.rand(1)
-                thresh = logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
+                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
                 if torch.log(u) < thresh:
                     self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
