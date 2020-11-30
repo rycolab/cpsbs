@@ -27,7 +27,7 @@ bleu = Extension(
     ],
     extra_compile_args=['-std=c++11'],
 )
-cps = [Extension('fairseq.cps_dp', ["fairseq/cps_dp.pyx"])]
+cps = [Extension('fairseq.cps_dp', ["fairseq/cps_dp.pyx"], include_dirs=[numpy.get_include()])]
 setup(
     ext_modules=cythonize(cps)
 )
