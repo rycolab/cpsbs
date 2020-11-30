@@ -437,7 +437,7 @@ class SequenceGenerator(object):
 
                     # finalize all active hypotheses once we hit max_len
                     # pick the hypothesis with the highest prob of EOS right now
-                    torch.sort(
+                torch.sort(
                         lprobs[:, self.eos],
                         descending=True,
                         out=(eos_scores, eos_bbsz_idx),

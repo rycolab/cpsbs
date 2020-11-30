@@ -137,7 +137,6 @@ class CPS(Search):
 
             pr.disable()
             print("Whole Sampling stat:")
-            pr.print_stats()
 
 
         # inclusion_probs = self._calc_inclusion_probs(p, k)

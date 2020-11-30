@@ -18,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.serialization import default_restore_location
+import cProfile
 
 
 def torch_persistent_save(*args, **kwargs):
@@ -479,6 +480,9 @@ def log1pexp(x):
     Source:
     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
     """
+    pr = cProfile.Profile()
+    pr.enable()
+
     result = np.copy(x)
     result[x <= -37] = np.exp(x)[x <= -37]
     result[(-37 <= x) & (x <= 18)] = np.log1p(np.exp(x))[(-37 <= x) & (x <= 18)]
@@ -491,6 +495,9 @@ def log1pexp(x):
     #     return x + np.exp(-x)
     # else:
     #     return x
+    pr.disable()
+    print("stats on log1pexp")
+    pr.print_stats()
     return result
 
 
@@ -499,6 +506,9 @@ def log_add(x, y):
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
     """
+    pr = cProfile.Profile()
+    pr.enable()
+
     result = np.zeros(x.shape)
     result[x == -np.inf] = y[x == -np.inf]
     result[y == -np.inf] = x[y == -np.inf]
@@ -516,4 +526,7 @@ def log_add(x, y):
     #         d = x-y
     #         r = y
     #     return r + log1pexp(d)
+    pr.disable()
+    print("stats on log add")
+    pr.print_stats()
     return result
