@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 from fairseq.utils import log_add
 
+import numpy as np
+
 
 class Search(object):
 
@@ -71,14 +73,14 @@ class CPS(Search):
     def _init_buffers(self, t):
         super()._init_buffers(t)
 
-        self.remaining_subsetsum_product_probs = torch.FloatTensor().to(device=t.device)
-        self.subset_sum_product_probs = torch.FloatTensor().to(device=t.device)
-        self.dp = torch.FloatTensor().to(device=t.device)
-        self.p = torch.FloatTensor().to(device=t.device)
+        self.remaining_subsetsum_product_probs = None
+        self.subset_sum_product_probs = None
+        self.dp = None
+        self.p = None
         self.samples_idx = torch.LongTensor().to(device=t.device)
 
     def _initialize_dp(self, bsz, k, n):
-        self.subset_sum_product_probs = torch.full((bsz, k+1, n+1), -float("Inf"))
+        self.subset_sum_product_probs = np.full((bsz, k+1, n+1), -np.inf)
         self.subset_sum_product_probs[:, 0, :] = 0.
 
     def _calc_normalization(self, logp, k, j):
@@ -99,8 +101,8 @@ class CPS(Search):
 
     def _calc_inclusion_probs(self, p, k, j):
         n = len(p) - 1
-        torch.zeros((n + 1), out=self.dp)
-        torch.zeros((k + 2, n + 2), out=self.remaining_subsetsum_product_probs)
+        self.dp = np.zeros((n + 1))
+        self.remaining_subsetsum_product_probs = np.zeros((k + 2, n + 2))
         self.remaining_subsetsum_product_probs[k, :] = 1
         for r in range(k, 0, -1):
             for i in range(n, 0, -1):
