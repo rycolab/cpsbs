@@ -115,6 +115,7 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
+        logp = logp.detach().numpy()
         n = logp.size()[1]
         k = min(n, k)
 
