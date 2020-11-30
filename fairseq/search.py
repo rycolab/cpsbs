@@ -116,7 +116,7 @@ class CPS(Search):
 
     def cps_sample(self, logp, k, bsz):
         logp = logp.detach().numpy()
-        n = logp.size()[1]
+        n = logp.shape[1]
         k = min(n, k)
 
         self._initialize_dp(bsz, k, n)
