@@ -481,8 +481,8 @@ def log1pexp(x):
     """
     result = np.copy(x)
     result[x <= -37] = np.exp(x)[x <= -37]
-    result[(-37 <= x) & (x <= 18)] = np.log1p(np.exp(x))[-37 <= x <= 18]
-    result[(18 < x) & (x <= 33.3)] = x + np.exp(-x)[18 < x <= 33.3]
+    result[(-37 <= x) & (x <= 18)] = np.log1p(np.exp(x))[(-37 <= x) & (x <= 18)]
+    result[(18 < x) & (x <= 33.3)] = x + np.exp(-x)[(18 < x) & (x <= 33.3)]
     # if x <= -37:
     #     return np.exp(x)
     # elif -37 <= x <= 18:
