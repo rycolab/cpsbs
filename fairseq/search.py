@@ -14,6 +14,7 @@ from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 from fairseq.utils import log_add
 
 import numpy as np
+from fairseq.cps_dp import calc_normalization
 import cProfile
 
 
@@ -112,32 +113,32 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
-        pr = cProfile.Profile()
-        pr.enable()
-
+        # pr = cProfile.Profile()
+        # pr.enable()
         self.logp = logp.detach().numpy()
         n = self.logp.shape[1]
         k = min(n, k)
 
-        self._initialize_dp(bsz, k, n)
+        # self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+        thresholds = np.log(np.random.uniform(size=(bsz, n)))
 
         for j in range(bsz):
             to_pick_number = k
-            self._calc_normalization(self.logp[j, :], k, j)
+            # self._calc_normalization(self.logp[j, :], k, j)
+            self.subset_sum_product_probs = calc_normalization(self.logp[j, :], k)
 
             for i in range(n, 0, -1):
-                u = torch.rand(1)
-                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
-                if torch.log(u) < thresh:
+                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[to_pick_number - 1, i - 1] - self.subset_sum_product_probs[to_pick_number, i]
+                if thresholds[j, i - 1] < thresh:
                     self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
                     to_pick_number -= 1
                     if to_pick_number == 0:
                         break
 
-            pr.disable()
-            pr.print_stats()
-            print("Whole Sampling stat:")
+            # pr.disable()
+            # pr.print_stats()
+            # print("Whole Sampling stat:")
 
 
         # inclusion_probs = self._calc_inclusion_probs(p, k)
@@ -171,13 +172,15 @@ class CPS(Search):
         self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
 
         # Gather cumulative
+        log_ps_buf_buf = self.log_ps_buf.clone()
+        log_ps_t_buf_buf = self.log_ps_t_buf.clone()
 
         torch.gather(
-            self.log_ps_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+            log_ps_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
 
         torch.gather(
-            self.log_ps_t_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+            log_ps_t_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)

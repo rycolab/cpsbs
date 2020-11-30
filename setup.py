@@ -8,6 +8,8 @@
 
 from setuptools import setup, find_packages, Extension
 import sys
+from Cython.Build import cythonize
+import numpy
 
 
 if sys.version_info < (3,):
@@ -25,7 +27,10 @@ bleu = Extension(
     ],
     extra_compile_args=['-std=c++11'],
 )
-
+cps = [Extension('fairseq.cps_dp', ["fairseq/cps_dp.pyx"])]
+setup(
+    ext_modules=cythonize(cps)
+)
 
 setup(
     name='fairseq',
