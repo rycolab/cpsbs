@@ -14,6 +14,7 @@ from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 from fairseq.utils import log_add
 
 import numpy as np
+import cProfile
 
 
 class Search(object):
@@ -84,19 +85,18 @@ class CPS(Search):
         self.subset_sum_product_probs[:, 0, :] = 0.
 
     def _calc_normalization(self, logp, k, j):
+
         n = len(logp)
-        print("start normalization")
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
         # self.p_rolled = torch.roll(p, -1, 0)
         # torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
         # torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
 
+
         for r in range(1, k + 1):
             for i in range(1, n + 1):
                 intermediate_res = self.subset_sum_product_probs[j, r - 1, i - 1] + logp[i-1]
                 self.subset_sum_product_probs[j, r, i] = log_add(intermediate_res, self.subset_sum_product_probs[j, r, i - 1])
-        print("end normalization")
-        # return normalization_factor
         return
 
     def _calc_inclusion_probs(self, p, k, j):
@@ -115,25 +115,29 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
-        self.logp = logp.detach().numpy()
-        n = self.logp.shape[1]
-        k = min(n, k)
+        with cProfile.Profile() as pr:
+            self.logp = logp.detach().numpy()
+            n = self.logp.shape[1]
+            k = min(n, k)
 
-        self._initialize_dp(bsz, k, n)
-        torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+            self._initialize_dp(bsz, k, n)
+            torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
 
-        for j in range(bsz):
-            self._calc_normalization(self.logp[j, :], k, j)
-            to_pick_number = k
+            for j in range(bsz):
+                self._calc_normalization(self.logp[j, :], k, j)
+                to_pick_number = k
 
-            for i in range(n, 0, -1):
-                u = torch.rand(1)
-                thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
-                if torch.log(u) < thresh:
-                    self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
-                    to_pick_number -= 1
-                    if to_pick_number == 0:
-                        break
+                for i in range(n, 0, -1):
+                    u = torch.rand(1)
+                    thresh = self.logp[j, i - 1] + self.subset_sum_product_probs[j, to_pick_number - 1, i - 1] - self.subset_sum_product_probs[j, to_pick_number, i]
+                    if torch.log(u) < thresh:
+                        self.samples_idx[j, k - to_pick_number - 1] = (i - 1)
+                        to_pick_number -= 1
+                        if to_pick_number == 0:
+                            break
+            print("Whole Sampling stat:")
+            pr.print_stats()
+
 
         # inclusion_probs = self._calc_inclusion_probs(p, k)
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
