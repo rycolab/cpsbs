@@ -479,14 +479,19 @@ def log1pexp(x):
     Source:
     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
     """
-    if x <= -37:
-        return np.exp(x)
-    elif -37 <= x <= 18:
-        return np.log1p(np.exp(x))
-    elif 18 < x <= 33.3:
-        return x + np.exp(-x)
-    else:
-        return x
+    result = np.copy(x)
+    result[x <= -37] = np.exp(x)[x <= -37]
+    result[-37 <= x <= 18] = np.log1p(np.exp(x))[-37 <= x <= 18]
+    result[18 < x <= 33.3] = x + np.exp(-x)[18 < x <= 33.3]
+    # if x <= -37:
+    #     return np.exp(x)
+    # elif -37 <= x <= 18:
+    #     return np.log1p(np.exp(x))
+    # elif 18 < x <= 33.3:
+    #     return x + np.exp(-x)
+    # else:
+    #     return x
+    return result
 
 
 def log_add(x, y):
@@ -494,15 +499,20 @@ def log_add(x, y):
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
     """
-    if x == -np.inf:
-        return y
-    elif y == -np.inf:
-        return x
-    else:
-        if y <= x:
-            d = y-x
-            r = x
-        else:
-            d = x-y
-            r = y
-        return r + log1pexp(d)
+    result = np.copy(x)
+    result[x == -np.inf] = y[x == -np.inf]
+    result[y <= x] = x[y <= x] + log1pexp((y-x)[y <= x])
+    result[y > x] = y[y > x] + log1pexp((x-y)[y > x])
+    # if x == -np.inf:
+    #     return y
+    # elif y == -np.inf:
+    #     return x
+    # else:
+    #     if y <= x:
+    #         d = y-x
+    #         r = x
+    #     else:
+    #         d = x-y
+    #         r = y
+    #     return r + log1pexp(d)
+    return result

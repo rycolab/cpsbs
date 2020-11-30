@@ -84,23 +84,20 @@ class CPS(Search):
         self.subset_sum_product_probs = np.full((bsz, k+1, n+1), -np.inf)
         self.subset_sum_product_probs[:, 0, :] = 0.
 
-    def _calc_normalization(self, logp, k, j):
-
-        n = len(logp)
+    def _calc_normalization(self, logp, k):
+        n = logp.shape[1]
         # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
         # self.p_rolled = torch.roll(p, -1, 0)
         # torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
         # torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
-
-
         for r in range(1, k + 1):
             for i in range(1, n + 1):
-                intermediate_res = self.subset_sum_product_probs[j, r - 1, i - 1] + logp[i-1]
-                self.subset_sum_product_probs[j, r, i] = log_add(intermediate_res, self.subset_sum_product_probs[j, r, i - 1])
+                intermediate_res = self.subset_sum_product_probs[:, r - 1, i - 1] + logp[:, i-1]
+                self.subset_sum_product_probs[j, r, i] = log_add(intermediate_res, self.subset_sum_product_probs[:, r, i - 1])
         return
 
-    def _calc_inclusion_probs(self, p, k, j):
-        n = len(p) - 1
+    def _calc_inclusion_probs(self, p, k):
+        n = len(p)
         self.dp = np.zeros((n + 1))
         self.remaining_subsetsum_product_probs = np.zeros((k + 2, n + 2))
         self.remaining_subsetsum_product_probs[k, :] = 1
@@ -124,9 +121,9 @@ class CPS(Search):
 
         self._initialize_dp(bsz, k, n)
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+        self._calc_normalization(self.logp, k)
 
         for j in range(bsz):
-            self._calc_normalization(self.logp[j, :], k, j)
             to_pick_number = k
 
             for i in range(n, 0, -1):
