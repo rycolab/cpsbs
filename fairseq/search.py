@@ -14,7 +14,8 @@ from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 from fairseq.utils import log_add
 
 import numpy as np
-from fairseq.cps_dp import calc_normalization, sample
+from fairseq.cps_dp import sample
+from torch.multiprocessing import Pool
 import cProfile
 
 
@@ -115,8 +116,13 @@ class CPS(Search):
     def cps_sample(self, logp, k, bsz):
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
-        sample_idx_np = sample(logp_np, k, bsz)
+
+        with Pool(processes=4) as pool:
+            multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
+            sample_idx_np = np.asarray([el.get() for el in multiple_results])
+
         self.samples_idx = torch.from_numpy(sample_idx_np).to(device=logp.device)
+        print(self.samples_idx.size())
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
