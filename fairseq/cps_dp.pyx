@@ -1,10 +1,11 @@
-# cython: profile=True
-
 import numpy as np
 
 cimport cython
+from cython.parallel import prange
+
 cimport numpy as np
 from libc.math cimport exp, log1p
+
 
 cdef extern from "math.h":
     float INFINITY
@@ -13,7 +14,7 @@ ctypedef np.float64_t DTYPE_t
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef inline DTYPE_t log1pexp(DTYPE_t x):
+cdef inline DTYPE_t log1pexp(DTYPE_t x) nogil:
     """
     Numerically stable implementation of log(1+exp(x)) aka softmax(0,x).
     -log1pexp(-x) is log(sigmoid(x))
@@ -32,7 +33,7 @@ cdef inline DTYPE_t log1pexp(DTYPE_t x):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y):
+cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y) nogil:
     """
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
@@ -63,9 +64,9 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
     cdef int i
 
     for r in range(1, k + 1):
-        for i in range(1, n + 1):
+        for i in prange(1, n + 1, nogil=True):
             intermediate_res[i] = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
-        for i in range(1, n + 1):
+        for i in prange(1, n + 1, nogil=True):
             subset_sum_product_probs[r, i] = log_add(intermediate_res[i], subset_sum_product_probs[r, i - 1])
     return subset_sum_product_probs
 
