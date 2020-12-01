@@ -1,13 +1,19 @@
+# cython: profile=True
+
 import numpy as np
 
 cimport cython
 cimport numpy as np
+from libc.math cimport exp, log1p
+
+cdef extern from "math.h":
+    float INFINITY
 
 ctypedef np.float64_t DTYPE_t
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def log1pexp(DTYPE_t x):
+cdef inline DTYPE_t log1pexp(DTYPE_t x):
     """
     Numerically stable implementation of log(1+exp(x)) aka softmax(0,x).
     -log1pexp(-x) is log(sigmoid(x))
@@ -15,37 +21,31 @@ def log1pexp(DTYPE_t x):
     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
     """
     if x <= -37:
-        return np.exp(x)
+        return exp(x)
     elif -37 <= x <= 18:
-        return np.log1p(np.exp(x))
+        return log1p(exp(x))
     elif 18 < x <= 33.3:
-        return x + np.exp(-x)
+        return x + exp(-x)
     else:
         return x
 
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def log_add(DTYPE_t x, DTYPE_t y):
+cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y):
     """
     Addition of 2 values in log space.
     Need separate checks for inf because inf-inf=nan
     """
-    cdef DTYPE_t d
-    cdef DTYPE_t r
-
-    if x == -np.inf:
+    if x == -INFINITY:
         return y
-    elif y == -np.inf:
+    elif y == -INFINITY:
         return x
     else:
         if y <= x:
-            d = y-x
-            r = x
+            return x + log1pexp(y-x)
         else:
-            d = x-y
-            r = y
-        return r + log1pexp(d)
+            return y + log1pexp(x-y)
 
 
 @cython.boundscheck(False)
@@ -56,17 +56,17 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
 
     subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf, dtype=np.float64)
     subset_sum_product_probs[0, :] = 0.
-    cdef np.ndarray[DTYPE_t, ndim=2] intermediate_res
-    intermediate_res = np.full((k + 1, n + 1), -np.inf, dtype=np.float64)
+    cdef np.ndarray[DTYPE_t, ndim=1] intermediate_res
+    intermediate_res = np.full(n + 1, -np.inf, dtype=np.float64)
 
     cdef int r
     cdef int i
 
     for r in range(1, k + 1):
         for i in range(1, n + 1):
-            intermediate_res[r, i] = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
+            intermediate_res[i] = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
         for i in range(1, n + 1):
-            subset_sum_product_probs[r, i] = log_add(intermediate_res[r, i], subset_sum_product_probs[r, i - 1])
+            subset_sum_product_probs[r, i] = log_add(intermediate_res[i], subset_sum_product_probs[r, i - 1])
     return subset_sum_product_probs
 
 
