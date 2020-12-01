@@ -1,8 +1,11 @@
+cimport cython
 import numpy as np
 
 cimport numpy as np
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def log1pexp(np.float_t x):
     """
     Numerically stable implementation of log(1+exp(x)) aka softmax(0,x).
@@ -20,6 +23,8 @@ def log1pexp(np.float_t x):
         return x
 
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def log_add(np.float_t x, np.float_t y):
     """
     Addition of 2 values in log space.
@@ -42,10 +47,13 @@ def log_add(np.float_t x, np.float_t y):
         return r + log1pexp(d)
 
 
-def calc_normalization(np.ndarray logp, int k):
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def calc_normalization(np.ndarray[float, ndim=1] logp, int k):
     cdef int n = len(logp)
+    cdef np.ndarray[double, ndim=2] subset_sum_product_probs
 
-    cdef np.ndarray subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf)
+    subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf)
     subset_sum_product_probs[0, :] = 0.
     cdef np.float_t intermediate_res
 
