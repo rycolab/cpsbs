@@ -115,17 +115,18 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
+        torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
-        # multiple_results = []
         with Pool(processes=multiprocessing.cpu_count()) as pool:
             multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
             sample_idx_np = np.asarray([el.get() for el in multiple_results])
-        # for j in range(bsz):
-        #     multiple_results.append(sample(logp_np[j,:], k, bsz))
-        # sample_idx_np = np.asarray(multiple_results)
 
-        self.samples_idx = torch.from_numpy(sample_idx_np).to(device=logp.device)
+        # for j in range(bsz):
+        #     self.samples_idx[j] = torch.from_numpy(sample(logp_np[j,:], k, bsz))
+
+        self.samples_idx = torch.from_numpy(sample_idx_np)
         return torch.gather(logp, -1, self.samples_idx), self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
