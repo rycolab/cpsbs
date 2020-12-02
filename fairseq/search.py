@@ -120,7 +120,7 @@ class CPS(Search):
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
 
-        print("I am using {} number of cores".format(multiprocessing.cpu_count()))
+        # print("I am using {} number of cores".format(multiprocessing.cpu_count()))
         with Pool(processes=multiprocessing.cpu_count()) as pool:
             multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
             sample_idx_np = np.asarray([el.get() for el in multiple_results])
