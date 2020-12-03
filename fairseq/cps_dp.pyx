@@ -21,11 +21,11 @@ cdef inline DTYPE_t log1pexp(DTYPE_t x) nogil:
     Source:
     http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
     """
-    if x <= -37:
+    if x <= -37.:
         return exp(x)
-    elif -37 <= x <= 18:
+    elif -37. <= x <= 18.:
         return log1p(exp(x))
-    elif 18 < x <= 33.3:
+    elif 18. < x <= 33.3:
         return x + exp(-x)
     else:
         return x
@@ -74,15 +74,15 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
-    cdef int n = len(logp)
+    cdef long n = len(logp)
     k = min(n, k)
 
-    cdef np.ndarray[np.int_t, ndim=1] samples_idx
-    samples_idx = np.zeros(k, dtype=np.int)
+    cdef list samples_idx = []
+    # samples_idx = np.zeros(k, dtype=np.int64)
 
     cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
 
-    cdef int i
+    cdef long i
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
     cdef DTYPE_t thresh
     cdef int to_pick_number
@@ -92,8 +92,8 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     for i in range(n, 0, -1):
         thresh = logp[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
         if thresholds[i - 1] < thresh:
-            samples_idx[k - to_pick_number - 1] = (i - 1)
+            samples_idx.append(i - 1)
             to_pick_number -= 1
             if to_pick_number == 0:
                 break
-    return samples_idx
+    return np.asarray(samples_idx)
