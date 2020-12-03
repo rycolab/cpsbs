@@ -82,22 +82,7 @@ class CPS(Search):
         self.dp = None
         self.p = None
         self.samples_idx = torch.LongTensor().to(device=t.device)
-
-    def _initialize_dp(self, bsz, k, n):
-        self.subset_sum_product_probs = np.full((bsz, k+1, n+1), -np.inf)
-        self.subset_sum_product_probs[:, 0, :] = 0.
-
-    def _calc_normalization(self, logp, k, j):
-        n = len(logp)
-        # self.shifted_rows = torch.roll(self.subset_sum_product_probs, 1, 0)
-        # self.p_rolled = torch.roll(p, -1, 0)
-        # torch.mul(self.shifted_rows, self.p_rolled, out=self.shifted_rows)
-        # torch.add(torch.cumsum(self.shifted_rows, dim=1), torch.cumsum(self.subset_sum_product_probs, dim=1), out=self.subset_sum_product_probs)
-        for r in range(1, k + 1):
-            for i in range(1, n + 1):
-                intermediate_res = self.subset_sum_product_probs[j, r - 1, i - 1] + logp[i-1]
-                self.subset_sum_product_probs[j, r, i] = log_add(intermediate_res, self.subset_sum_product_probs[j, r, i - 1])
-        return
+        self.log_inclusion_probs = torch.FloatTensor().to(device=t.device)
 
     def _calc_inclusion_probs(self, p, k, j):
         n = len(p)
@@ -116,20 +101,23 @@ class CPS(Search):
 
     def cps_sample(self, logp, k, bsz):
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
+        torch.zeros([bsz, k], out=self.log_inclusion_probs)
 
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
 
         # print("I am using {} number of cores".format(multiprocessing.cpu_count()))
-        with Pool(processes=multiprocessing.cpu_count()) as pool:
-            multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
-            sample_idx_np = np.asarray([el.get() for el in multiple_results])
+        # with Pool(processes=multiprocessing.cpu_count()) as pool:
+        #     multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
+        #     sample_idx_np = np.asarray([el.get() for el in multiple_results])
 
-        # for j in range(bsz):
-        #     self.samples_idx[j] = torch.from_numpy(sample(logp_np[j,:], k, bsz))
+        for j in range(bsz):
+            sample_idx_np, log_inc_np = sample(logp_np[j,:], k, bsz)
+            self.samples_idx[j] = torch.from_numpy(sample_idx_np)
+            self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
 
-        self.samples_idx = torch.from_numpy(sample_idx_np)
-        return torch.gather(logp, -1, self.samples_idx), self.samples_idx
+        # self.samples_idx = torch.from_numpy(sample_idx_np)
+        return self.log_inclusion_probs, self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
         bsz, beam_size, vocab_size = lprobs.size()

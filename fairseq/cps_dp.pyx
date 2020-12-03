@@ -73,6 +73,27 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
+def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced, np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs, int k):
+    cdef int n = len(logp_sliced)
+    cdef np.ndarray[DTYPE_t, ndim=1] dp = np.full(n, -np.inf, dtype=np.float64)
+    cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
+
+    cdef np.ndarray[DTYPE_t, ndim=2] remaining_subsetsum_product_probs = np.full((k + 2, n + 2), -np.inf, dtype=np.float64)
+    remaining_subsetsum_product_probs[k, :] = 0.
+
+    cdef int r
+    cdef int i
+    for r in range(k, 0, -1):
+        for i in range(n, 0, -1):
+            dp[i-1] = log_add(dp[i-1], subset_sum_product_probs[r - 1, i - 1] + remaining_subsetsum_product_probs[r, i + 1])
+            remaining_subsetsum_product_probs[r, i] = log_add(remaining_subsetsum_product_probs[r + 1, i + 1] + logp_sliced[i-1], remaining_subsetsum_product_probs[r, i + 1])
+
+    log_inclusion_probs = logp_sliced + dp - subset_sum_product_probs[k, n]
+    return log_inclusion_probs
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     cdef long n = len(logp)
     k = min(n, k)
@@ -86,9 +107,11 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
     cdef DTYPE_t thresh
     cdef int to_pick_number
+    cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
 
     to_pick_number = k
     subset_sum_product_probs = calc_normalization(logp, k)
+    log_inclusion_probs = calc_log_inclusion_probs(logp, subset_sum_product_probs, k)
     for i in range(n, 0, -1):
         thresh = logp[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
         if thresholds[i - 1] < thresh:
@@ -96,4 +119,4 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
             to_pick_number -= 1
             if to_pick_number == 0:
                 break
-    return np.asarray(samples_idx)
+    return np.asarray(samples_idx), log_inclusion_probs[np.asarray(samples_idx)]
