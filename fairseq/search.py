@@ -100,8 +100,9 @@ class CPS(Search):
         return inclusion_probs
 
     def cps_sample(self, logp, k, bsz):
+        n = logp.size()[1]
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
-        torch.zeros([bsz, k], out=self.log_inclusion_probs)
+        torch.zeros([bsz, n], out=self.log_inclusion_probs)
 
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
@@ -116,7 +117,6 @@ class CPS(Search):
             self.samples_idx[j] = torch.from_numpy(sample_idx_np)
             self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
 
-        # self.samples_idx = torch.from_numpy(sample_idx_np)
         return self.log_inclusion_probs, self.samples_idx
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
@@ -144,11 +144,20 @@ class CPS(Search):
             self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
             self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
-        self.scores_buf, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
+        cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
 
         # Gather cumulative
         log_ps_buf_buf = self.log_ps_buf.clone()
         log_ps_t_buf_buf = self.log_ps_t_buf.clone()
+        #
+        if step != 0:
+            cand_scores = torch.reshape(cand_scores, (bsz, beam_size, -1))
+            cand_scores.add_(scores[:, :, step - 1].unsqueeze(-1))
+
+        torch.gather(
+            cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
+        )
+        print(self.scores_buf)
 
         torch.gather(
             log_ps_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf

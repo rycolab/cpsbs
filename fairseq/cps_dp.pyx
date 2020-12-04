@@ -119,4 +119,4 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
             to_pick_number -= 1
             if to_pick_number == 0:
                 break
-    return np.asarray(samples_idx), log_inclusion_probs[np.asarray(samples_idx)]
+    return np.asarray(samples_idx), log_inclusion_probs
