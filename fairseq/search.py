@@ -157,7 +157,6 @@ class CPS(Search):
         torch.gather(
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )
-        print(self.scores_buf)
 
         torch.gather(
             log_ps_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
