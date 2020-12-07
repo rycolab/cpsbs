@@ -133,23 +133,20 @@ class CPS(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            self.log_ps_buf = lprobs.clone()
-            self.log_ps_t_buf = lprobs_t.clone()
+            cum_lprobs = lprobs.clone()
+            cum_lprobs_t = lprobs_t.clone()
 
             # make probs contain cumulative scores for each hypothesis
             # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
         else:
-            self.log_ps_buf = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
-            self.log_ps_t_buf = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
+            # Gather cumulative
+            cum_lprobs = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
+            cum_lprobs_t = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
 
         cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
 
-        # Gather cumulative
-        log_ps_buf_buf = self.log_ps_buf.clone()
-        log_ps_t_buf_buf = self.log_ps_t_buf.clone()
-        #
         if step != 0:
             cand_scores = torch.reshape(cand_scores, (bsz, beam_size, -1))
             cand_scores.add_(scores[:, :, step - 1].unsqueeze(-1))
@@ -158,13 +155,16 @@ class CPS(Search):
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )
 
+
         torch.gather(
-            log_ps_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+            cum_lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
 
         torch.gather(
-            log_ps_t_buf_buf.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+            cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
+
+        print(self.log_ps_t_buf)
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
