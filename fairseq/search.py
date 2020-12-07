@@ -163,9 +163,6 @@ class CPS(Search):
         torch.gather(
             cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
-
-        print(self.log_ps_t_buf)
-
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
         return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf

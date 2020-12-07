@@ -422,7 +422,7 @@ class SequenceGenerator(object):
                 # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
                 # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
                 # but this way we can deal with varying numbers of samples per sequence easily
-                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS):
+                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic):
                     # For beam search, we simply stop here with the k samples we have
                     # Sort by the perturbed log-probability
                     torch.sort(
@@ -430,6 +430,14 @@ class SequenceGenerator(object):
                         descending=True,
                         out=(eos_scores, eos_bbsz_idx),
                     )
+                if isinstance(self.search, search.CPS):
+                    lprobs.add_(log_ps[:, step - 1].unsqueeze(-1))
+                    torch.sort(
+                        lprobs[:, self.eos],
+                        descending=True,
+                        out=(eos_scores, eos_bbsz_idx),
+                    )
+
                 else:
                     # All other cases (beam search, sampling)
                     # make probs contain cumulative scores for each hypothesis
@@ -437,11 +445,11 @@ class SequenceGenerator(object):
 
                     # finalize all active hypotheses once we hit max_len
                     # pick the hypothesis with the highest prob of EOS right now
-                torch.sort(
-                        lprobs[:, self.eos],
-                        descending=True,
-                        out=(eos_scores, eos_bbsz_idx),
-                    )
+                    torch.sort(
+                            lprobs[:, self.eos],
+                            descending=True,
+                            out=(eos_scores, eos_bbsz_idx),
+                        )
 
                 # We do not want lprobs as scores since the last probs have been added,
                 # this is not what is actually what happens if we sample eos with prob 1
