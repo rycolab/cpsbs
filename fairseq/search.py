@@ -118,34 +118,53 @@ class CPS(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            cum_lprobs = lprobs.clone()
-            cum_lprobs_t = lprobs_t.clone()
+            # cum_lprobs = lprobs.clone()
+            # cum_lprobs_t = lprobs_t.clone()
 
         else:
             # Gather cumulative
-            cum_lprobs = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
-            cum_lprobs_t = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
+            # cum_lprobs = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
+            # cum_lprobs_t = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
+
+            lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
+            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
         cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
 
-        if step != 0:
-            cand_scores = torch.reshape(cand_scores, (bsz, beam_size, -1))
-            cand_scores.add_(scores[:, :, step - 1].unsqueeze(-1))
+
+        # if step != 0:
+        #     cand_scores = torch.reshape(cand_scores, (bsz, beam_size, -1))
+        #     cand_scores.add_(scores[:, :, step - 1].unsqueeze(-1))
+
+        # torch.gather(
+        #     cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
+        # )
+        #
+        # torch.gather(
+        #     cum_lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+        # )
+        #
+        # torch.gather(
+        #     cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+        # )
+
+        torch.gather(
+            lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+        )
+
+
+        torch.gather(
+            lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+        )
+
+
+        # print(self.log_ps_t_buf)
+        # print(torch.gather(lprobs_t.view(bsz, -1), -1, self.indices_buf))
+        # print("=======")
 
         torch.gather(
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )
-
-        torch.gather(
-            cum_lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
-        )
-
-        torch.gather(
-            cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
-        )
-        # print(self.log_ps_t_buf)
-        # print(torch.gather(lprobs_t.view(bsz, -1), -1, self.indices_buf))
-        # print("=======")
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
         return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
