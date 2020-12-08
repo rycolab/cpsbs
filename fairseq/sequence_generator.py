@@ -470,7 +470,7 @@ class SequenceGenerator(object):
             eos_mask = cand_indices.eq(self.eos)
 
             finalized_sents = set()
-            if False and step >= self.min_len:
+            if step >= self.min_len:
                 # only consider eos when it's among the top beam_size indices
                 torch.masked_select(
                     cand_bbsz_idx[:, :beam_size],
