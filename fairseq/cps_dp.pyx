@@ -57,17 +57,17 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
 
     subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf, dtype=np.float64)
     subset_sum_product_probs[0, :] = 0.
-    cdef np.ndarray[DTYPE_t, ndim=1] intermediate_res
-    intermediate_res = np.full(n + 1, -np.inf, dtype=np.float64)
+    # cdef np.ndarray[DTYPE_t, ndim=1] intermediate_res
+    cdef float intermediate_res
+    # intermediate_res = np.full(n + 1, -np.inf, dtype=np.float64)
 
     cdef int r
     cdef int i
 
     for r in range(1, k + 1):
         for i in prange(1, n + 1, nogil=True):
-            intermediate_res[i] = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
-        for i in prange(1, n + 1, nogil=True):
-            subset_sum_product_probs[r, i] = log_add(intermediate_res[i], subset_sum_product_probs[r, i - 1])
+            intermediate_res = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
+            subset_sum_product_probs[r, i] = log_add(subset_sum_product_probs[r, i - 1], intermediate_res)
     return subset_sum_product_probs
 
 

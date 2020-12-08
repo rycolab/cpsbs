@@ -84,21 +84,6 @@ class CPS(Search):
         self.samples_idx = torch.LongTensor().to(device=t.device)
         self.log_inclusion_probs = torch.FloatTensor().to(device=t.device)
 
-    def _calc_inclusion_probs(self, p, k, j):
-        n = len(p)
-        self.dp = np.zeros((n + 1))
-        self.remaining_subsetsum_product_probs = np.zeros((k + 2, n + 2))
-        self.remaining_subsetsum_product_probs[k, :] = 1
-        for r in range(k, 0, -1):
-            for i in range(n, 0, -1):
-                self.dp[i] += self.subset_sum_product_probs[r - 1, i - 1] * self.remaining_subsetsum_product_probs[r, i + 1]
-                self.remaining_subsetsum_product_probs[r, i] = self.remaining_subsetsum_product_probs[r + 1, i + 1] * p[i] + \
-                                                          self.remaining_subsetsum_product_probs[r, i + 1]
-        p_cliped = p[1:]
-        dp_cliped = self.dp[1:]
-        inclusion_probs = p_cliped * dp_cliped / self.subset_sum_product_probs[k, n]
-        return inclusion_probs
-
     def cps_sample(self, logp, k, bsz):
         n = logp.size()[1]
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
@@ -136,10 +121,6 @@ class CPS(Search):
             cum_lprobs = lprobs.clone()
             cum_lprobs_t = lprobs_t.clone()
 
-            # make probs contain cumulative scores for each hypothesis
-            # lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
-            # lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
-
         else:
             # Gather cumulative
             cum_lprobs = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
@@ -155,7 +136,6 @@ class CPS(Search):
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )
 
-
         torch.gather(
             cum_lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
@@ -163,6 +143,9 @@ class CPS(Search):
         torch.gather(
             cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
+        # print(self.log_ps_t_buf)
+        # print(torch.gather(lprobs_t.view(bsz, -1), -1, self.indices_buf))
+        # print("=======")
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
         return self.scores_buf, self.log_ps_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf

@@ -430,7 +430,7 @@ class SequenceGenerator(object):
                         descending=True,
                         out=(eos_scores, eos_bbsz_idx),
                     )
-                if isinstance(self.search, search.CPS):
+                elif isinstance(self.search, search.CPS):
                     lprobs.add_(log_ps[:, step - 1].unsqueeze(-1))
                     torch.sort(
                         lprobs[:, self.eos],
@@ -470,7 +470,7 @@ class SequenceGenerator(object):
             eos_mask = cand_indices.eq(self.eos)
 
             finalized_sents = set()
-            if step >= self.min_len:
+            if False and step >= self.min_len:
                 # only consider eos when it's among the top beam_size indices
                 torch.masked_select(
                     cand_bbsz_idx[:, :beam_size],
