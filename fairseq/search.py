@@ -95,14 +95,20 @@ class CPS(Search):
         # print("I am using {} number of cores".format(multiprocessing.cpu_count()))
         # with Pool(processes=multiprocessing.cpu_count()) as pool:
         #     multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
-        #     sample_idx_np = np.asarray([el.get() for el in multiple_results])
+        #     sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
+        #     sample_idx_np.astype(np.int64)
+        #     log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
+        # self.samples_idx = torch.from_numpy(sample_idx_np)
+        # self.log_inclusion_probs = torch.from_numpy(log_inclusion_probs_np)
 
         for j in range(bsz):
             sample_idx_np, log_inc_np = sample(logp_np[j,:], k, bsz)
             self.samples_idx[j] = torch.from_numpy(sample_idx_np)
             self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
 
-        return self.log_inclusion_probs, self.samples_idx
+        _, indices = torch.sort(torch.gather(logp, -1, self.samples_idx), descending=True)
+
+        return self.log_inclusion_probs, torch.gather(self.samples_idx, -1, indices)
 
     def step(self, step, lprobs, scores, log_ps, log_ps_t):
         bsz, beam_size, vocab_size = lprobs.size()
@@ -129,7 +135,9 @@ class CPS(Search):
             lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
-        cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1), beam_size, bsz)
+        cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1),
+                                                        min(beam_size * 2, lprobs_t.view(bsz, -1).size(1) - 1),
+                                                        bsz)
 
 
         # if step != 0:
@@ -162,6 +170,7 @@ class CPS(Search):
         # print(torch.gather(lprobs_t.view(bsz, -1), -1, self.indices_buf))
         # print("=======")
 
+        self.scores_buf.type(torch.FloatTensor)
         torch.gather(
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )

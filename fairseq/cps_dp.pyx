@@ -84,7 +84,7 @@ def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced, np.ndarray
     cdef int r
     cdef int i
     for r in range(k, 0, -1):
-        for i in range(n, 0, -1):
+        for i in prange(n, 0, -1, nogil=True):
             dp[i-1] = log_add(dp[i-1], subset_sum_product_probs[r - 1, i - 1] + remaining_subsetsum_product_probs[r, i + 1])
             remaining_subsetsum_product_probs[r, i] = log_add(remaining_subsetsum_product_probs[r + 1, i + 1] + logp_sliced[i-1], remaining_subsetsum_product_probs[r, i + 1])
 

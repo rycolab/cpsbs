@@ -301,7 +301,8 @@ class SequenceGenerator(object):
                     }
 
                 if len(finalized[sent]) < beam_size:
-                    finalized[sent].append(get_hypo())
+                    new_hypo = get_hypo()
+                    finalized[sent].append(new_hypo)
                 elif not self.stop_early and score > worst_finalized[sent]['score']:
                     # replace worst hypo for this sentence with new/better one
                     worst_idx = worst_finalized[sent]['idx']
@@ -422,7 +423,7 @@ class SequenceGenerator(object):
                 # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
                 # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
                 # but this way we can deal with varying numbers of samples per sequence easily
-                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic):
+                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS):
                     # For beam search, we simply stop here with the k samples we have
                     # Sort by the perturbed log-probability
                     torch.sort(
@@ -430,14 +431,6 @@ class SequenceGenerator(object):
                         descending=True,
                         out=(eos_scores, eos_bbsz_idx),
                     )
-                elif isinstance(self.search, search.CPS):
-                    lprobs.add_(log_ps[:, step - 1].unsqueeze(-1))
-                    torch.sort(
-                        lprobs[:, self.eos],
-                        descending=True,
-                        out=(eos_scores, eos_bbsz_idx),
-                    )
-
                 else:
                     # All other cases (beam search, sampling)
                     # make probs contain cumulative scores for each hypothesis
@@ -547,7 +540,6 @@ class SequenceGenerator(object):
                 cand_offsets[:eos_mask.size(1)],
                 out=active_mask,
             )
-
             # get the top beam_size active hypotheses, which are just the hypos
             # with the smallest values in active_mask
             active_hypos, _ignore = buffer('active_hypos'), buffer('_ignore')
