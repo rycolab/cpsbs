@@ -92,19 +92,19 @@ class CPS(Search):
         logp_np = logp.detach().numpy()
         logp_np = logp_np.astype(np.float64)
 
-        # print("I am using {} number of cores".format(multiprocessing.cpu_count()))
-        # with Pool(processes=multiprocessing.cpu_count()) as pool:
-        #     multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
-        #     sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
-        #     sample_idx_np.astype(np.int64)
-        #     log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
-        # self.samples_idx = torch.from_numpy(sample_idx_np)
-        # self.log_inclusion_probs = torch.from_numpy(log_inclusion_probs_np)
+        with Pool(processes=multiprocessing.cpu_count()) as pool:
+            multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
+            sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
+            sample_idx_np.astype(np.int64)
+            log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
 
-        for j in range(bsz):
-            sample_idx_np, log_inc_np = sample(logp_np[j,:], k, bsz)
-            self.samples_idx[j] = torch.from_numpy(sample_idx_np)
-            self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
+        self.samples_idx = torch.from_numpy(sample_idx_np).to(device=logp.device)
+        self.log_inclusion_probs = torch.from_numpy(log_inclusion_probs_np).to(device=logp.device)
+
+        # for j in range(bsz):
+        #     sample_idx_np, log_inc_np = sample(logp_np[j,:], k, bsz)
+        #     self.samples_idx[j] = torch.from_numpy(sample_idx_np)
+        #     self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
 
         _, indices = torch.sort(torch.gather(logp, -1, self.samples_idx), descending=True)
 
@@ -155,22 +155,13 @@ class CPS(Search):
         # torch.gather(
         #     cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         # )
-
         torch.gather(
             lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
-
-
+        cand_scores = cand_scores.to(dtype=torch.float32)
         torch.gather(
             lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
-
-
-        # print(self.log_ps_t_buf)
-        # print(torch.gather(lprobs_t.view(bsz, -1), -1, self.indices_buf))
-        # print("=======")
-
-        self.scores_buf.type(torch.FloatTensor)
         torch.gather(
             cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
         )
