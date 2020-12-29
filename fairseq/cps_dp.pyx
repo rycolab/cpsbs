@@ -92,6 +92,7 @@ def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced, np.ndarray
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
+    print("here?")
     cdef long n = len(logp)
     k = min(n, k)
 
