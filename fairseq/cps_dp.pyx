@@ -106,8 +106,11 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
 
     to_pick_number = k
+    print("normalization")
     subset_sum_product_probs = calc_normalization(logp, k)
+    print("finished normalization, start inclusion")
     log_inclusion_probs = calc_log_inclusion_probs(logp, subset_sum_product_probs, k)
+    print("finished inclusion")
     for i in range(n, 0, -1):
         print(to_pick_number)
         thresh = logp[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
