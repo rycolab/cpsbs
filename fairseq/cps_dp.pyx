@@ -55,7 +55,7 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
     cdef int n = len(logp_sliced)
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
 
-    subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf, dtype=np.float64)
+    subset_sum_product_probs = np.full((k + 1, n + 1), -INFINITY, dtype=np.float64)
     subset_sum_product_probs[0, :] = 0.
     cdef float intermediate_res
     cdef int r
