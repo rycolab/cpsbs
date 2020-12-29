@@ -57,10 +57,7 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
 
     subset_sum_product_probs = np.full((k + 1, n + 1), -np.inf, dtype=np.float64)
     subset_sum_product_probs[0, :] = 0.
-    # cdef np.ndarray[DTYPE_t, ndim=1] intermediate_res
     cdef float intermediate_res
-    # intermediate_res = np.full(n + 1, -np.inf, dtype=np.float64)
-
     cdef int r
     cdef int i
 
@@ -99,8 +96,6 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     k = min(n, k)
 
     cdef list samples_idx = []
-    # samples_idx = np.zeros(k, dtype=np.int64)
-
     cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
 
     cdef long i

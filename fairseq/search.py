@@ -101,11 +101,6 @@ class CPS(Search):
         self.samples_idx = torch.from_numpy(sample_idx_np).to(device=logp.device)
         self.log_inclusion_probs = torch.from_numpy(log_inclusion_probs_np).to(device=logp.device)
 
-        # for j in range(bsz):
-        #     sample_idx_np, log_inc_np = sample(logp_np[j,:], k, bsz)
-        #     self.samples_idx[j] = torch.from_numpy(sample_idx_np)
-        #     self.log_inclusion_probs[j] = torch.from_numpy(log_inc_np)
-
         _, indices = torch.sort(torch.gather(logp, -1, self.samples_idx), descending=True)
 
         return self.log_inclusion_probs, torch.gather(self.samples_idx, -1, indices)
@@ -124,37 +119,14 @@ class CPS(Search):
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
             lprobs = lprobs[:, ::beam_size, :].contiguous()
 
-            # cum_lprobs = lprobs.clone()
-            # cum_lprobs_t = lprobs_t.clone()
-
         else:
             # Gather cumulative
-            # cum_lprobs = torch.add(lprobs, log_ps[:, :, step - 1].unsqueeze(-1))
-            # cum_lprobs_t = torch.add(lprobs_t, log_ps_t[:, :, step - 1].unsqueeze(-1))
-
             lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
             lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
         cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1),
                                                         min(beam_size * 2, lprobs_t.view(bsz, -1).size(1) - 1),
                                                         bsz)
-
-
-        # if step != 0:
-        #     cand_scores = torch.reshape(cand_scores, (bsz, beam_size, -1))
-        #     cand_scores.add_(scores[:, :, step - 1].unsqueeze(-1))
-
-        # torch.gather(
-        #     cand_scores.view(bsz, -1), -1, self.indices_buf, out=self.scores_buf
-        # )
-        #
-        # torch.gather(
-        #     cum_lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
-        # )
-        #
-        # torch.gather(
-        #     cum_lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
-        # )
         torch.gather(
             lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
         )
@@ -171,7 +143,6 @@ class CPS(Search):
 
 
 class BeamSearch(Search):
-
     def __init__(self, tgt_dict, naive_stochastic=False, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
         super().__init__(tgt_dict)
         self.stochastic = stochastic
