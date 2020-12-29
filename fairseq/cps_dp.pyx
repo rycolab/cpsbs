@@ -65,7 +65,6 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
         for i in prange(1, n + 1, nogil=True):
             print(r)
             print(i)
-            print("===")
             intermediate_res = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
             subset_sum_product_probs[r, i] = log_add(subset_sum_product_probs[r, i - 1], intermediate_res)
     return subset_sum_product_probs
