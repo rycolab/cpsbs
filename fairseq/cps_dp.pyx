@@ -62,7 +62,6 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
     cdef int i
 
     for r in range(1, k + 1):
-        print(r)
         for i in prange(1, n + 1, nogil=True):
             intermediate_res = subset_sum_product_probs[r - 1, i - 1] + logp_sliced[i - 1]
             subset_sum_product_probs[r, i] = log_add(subset_sum_product_probs[r, i - 1], intermediate_res)
@@ -106,11 +105,8 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, int k, int bsz):
     cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
 
     to_pick_number = k
-    print("normalization")
     subset_sum_product_probs = calc_normalization(logp, k)
-    print("finished normalization, start inclusion")
     log_inclusion_probs = calc_log_inclusion_probs(logp, subset_sum_product_probs, k)
-    print("finished inclusion")
     for i in range(n, 0, -1):
         thresh = logp[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
         if thresholds[i - 1] < thresh:
