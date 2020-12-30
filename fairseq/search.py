@@ -89,7 +89,7 @@ class CPS(Search):
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         torch.zeros([bsz, n], out=self.log_inclusion_probs)
 
-        logp_np = logp.detach().numpy()
+        logp_np = logp.detach().cpu().numpy()
         logp_np = logp_np.astype(np.float64)
 
         with Pool(processes=multiprocessing.cpu_count()) as pool:
