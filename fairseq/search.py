@@ -106,7 +106,7 @@ class CPS(Search):
 
         return self.log_inclusion_probs, torch.gather(self.samples_idx, -1, indices)
 
-    def step(self, step, lprobs, scores, log_ps, log_ps_t):
+    def step(self, step, lprobs, log_ps_t_copy, log_inc_probs, log_ps_t):
         bsz, beam_size, vocab_size = lprobs.size()
         self._init_buffers(lprobs)
 
@@ -118,20 +118,24 @@ class CPS(Search):
             # at the first step all hypotheses are equally likely, so use
             # only the first beam
             lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
-            lprobs = lprobs[:, ::beam_size, :].contiguous()
 
         else:
             # Gather cumulative
             lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
-            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
 
         cand_scores, self.indices_buf = self.cps_sample(lprobs_t.view(bsz, -1),
                                                         min(beam_size * 2, lprobs_t.view(bsz, -1).size(1) - 1),
                                                         bsz)
-        torch.gather(
-            lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
-        )
+
         cand_scores = cand_scores.to(dtype=torch.float32)
+        if step == 0:
+            print(cand_scores)
+            print(log_inc_probs)
+            print("====")
+        if step != 0:
+            cand_scores = cand_scores.view(bsz, beam_size, -1)
+            cand_scores.add_(log_inc_probs[:, :, step - 1].unsqueeze(-1))
+
         torch.gather(
             lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
         )
