@@ -128,10 +128,6 @@ class CPS(Search):
                                                         bsz)
 
         cand_scores = cand_scores.to(dtype=torch.float32)
-        if step == 0:
-            print(cand_scores)
-            print(log_inc_probs)
-            print("====")
         if step != 0:
             cand_scores = cand_scores.view(bsz, beam_size, -1)
             cand_scores.add_(log_inc_probs[:, :, step - 1].unsqueeze(-1))
