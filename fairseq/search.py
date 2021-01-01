@@ -92,15 +92,24 @@ class CPS(Search):
         logp_np = logp.detach().cpu().numpy()
         logp_np = logp_np.astype(np.float64)
 
-        with Pool(processes=multiprocessing.cpu_count()) as pool:
-            multiple_results = [pool.apply_async(sample, args=(logp_np[j,:], k, bsz)) for j in range(bsz)]
-            sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
-            sample_idx_np.astype(np.int64)
-            log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
+        # with Pool(processes=multiprocessing.cpu_count()) as pool:
+        #     multiple_results = [pool.apply_async(sample, args=(logp_np[j, :], k, bsz)) for j in range(bsz)]
+        #     sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
+        #     sample_idx_np.astype(np.int64)
+        #     log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
+
+        samples = []
+        incs = []
+        for j in range(bsz):
+            sample_idx, sample_inc = sample(logp_np[j,:], k, bsz)
+            samples.append(sample_idx)
+            incs.append(sample_inc)
+
+        sample_idx_np = np.asarray(samples)
+        log_inclusion_probs_np = np.asarray(incs)
 
         self.samples_idx = torch.from_numpy(sample_idx_np).to(device=logp.device)
         self.log_inclusion_probs = torch.from_numpy(log_inclusion_probs_np).to(device=logp.device)
-
 
         _, indices = torch.sort(torch.gather(logp, -1, self.samples_idx), descending=True)
 
