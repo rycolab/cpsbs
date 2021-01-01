@@ -367,6 +367,7 @@ class SequenceGenerator(object):
             eos_log_ps = buffer('eos_log_ps', type_of=scores)
             eos_log_ps_t = buffer('eos_log_ps_t', type_of=scores)
             if step < max_len:
+                print("{}/{}".format(step, max_len))
                 self.search.set_src_lengths(src_lengths)
 
                 if self.no_repeat_ngram_size > 0:
