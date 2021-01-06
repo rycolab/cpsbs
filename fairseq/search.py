@@ -84,6 +84,31 @@ class CPS(Search):
         self.samples_idx = torch.LongTensor().to(device=t.device)
         self.log_inclusion_probs = torch.FloatTensor().to(device=t.device)
 
+    @staticmethod
+    def log_nucleus_multinomial_sample(logp, nucleus_p=np.log(0.999)):
+        """
+        logp: log-probability distribution (unnormalized is ok) over discrete random variable
+        """
+        assert nucleus_p <= 0
+        sorted_inds = np.argsort(-logp)
+
+        sorted_logits = logp[sorted_inds]
+        cumulative_lprobs = np.logaddexp.accumulate(sorted_logits)
+        print(cumulative_lprobs)
+
+        sorted_indices_to_remove = cumulative_lprobs > nucleus_p
+        # Shift the indices to the right to keep also the first token above the threshold
+        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].copy()
+        sorted_indices_to_remove[..., 0] = 0
+
+        indices_to_remove = sorted_inds[sorted_indices_to_remove]
+
+        # sorted_indices_to_pick = cumulative_lprobs <= nucleus_p
+        # inds = sorted_inds[sorted_indices_to_pick]
+        print(logp.shape)
+        print(indices_to_remove.shape)
+        return indices_to_remove
+
     def cps_sample(self, logp, k, bsz):
         n = logp.size()[1]
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
@@ -101,6 +126,7 @@ class CPS(Search):
         samples = []
         incs = []
         for j in range(bsz):
+            print(self.log_nucleus_multinomial_sample(logp_np[j,:]))
             sample_idx, sample_inc = sample(logp_np[j,:], k, bsz)
             samples.append(sample_idx)
             incs.append(sample_inc)
