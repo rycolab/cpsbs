@@ -181,6 +181,66 @@ class CPS(Search):
         return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
+class DebiasedBeamSearch(Search):
+    def __init__(self, tgt_dict, sampling_topk=-1, sampling_temperature=1.0):
+        super().__init__(tgt_dict)
+        self.sampling_topk = sampling_topk
+        assert self.sampling_topk == -1, "Sampling top-k for beam search not yet supported"
+        self.sampling_temperature = sampling_temperature
+
+    def step(self, step, lprobs, scores, log_ps, log_ps_t):
+        super()._init_buffers(lprobs)
+        bsz, beam_size, vocab_size = lprobs.size()
+
+        lprobs_t = lprobs.clone()
+        if self.sampling_temperature != 1.0:
+            lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
+
+        if step == 0:
+            # at the first step all hypotheses are equally likely, so use
+            # only the first beam
+            lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
+            lprobs = lprobs[:, ::beam_size, :].contiguous()
+
+        else:
+            # make probs contain cumulative scores for each hypothesis
+            lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
+            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
+
+        cand_lprobs, cand_ind = torch.topk(
+            lprobs_t.view(bsz, -1),
+            k=min(
+                # Take the best 2 x beam_size predictions. We'll choose the first
+                # beam_size of these which don't predict eos to continue with.
+                beam_size * 2,
+                lprobs_t.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
+            ) - 1,
+            )
+        weights = torch.exp(lprobs_t).view(bsz, -1).clone()
+        weights.scatter_(1, cand_ind, 0.0)
+
+        # print(cand_lprobs.size())
+        sum_prob = torch.sum(weights, 1).unsqueeze(-1)
+        self.scores_buf = torch.cat([torch.exp(cand_lprobs), sum_prob], 1)
+        print(self.scores_buf)
+
+        last_ind = torch.multinomial(weights, 1)
+        self.indices_buf = torch.cat((cand_ind, last_ind), 1)
+
+        # Gather cumulative
+        torch.gather(
+            lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
+        )
+
+        torch.gather(
+            lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
+        )
+
+        torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
+        self.indices_buf.fmod_(vocab_size)
+        return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
+
+
 class BeamSearch(Search):
     def __init__(self, tgt_dict, naive_stochastic=False, stochastic=False, sampling_topk=-1, sampling_temperature=1.0):
         super().__init__(tgt_dict)

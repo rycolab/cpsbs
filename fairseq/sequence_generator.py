@@ -34,6 +34,7 @@ class SequenceGenerator(object):
         stochastic_beam_search=False,
         naive_stochastic_beam_search=False,
         cps=False,
+        debiasedbs=False,
         match_source_len=False,
         no_repeat_ngram_size=0,
     ):
@@ -99,6 +100,8 @@ class SequenceGenerator(object):
             )
         elif cps:
             self.search = search.CPS(tgt_dict, sampling_topk, sampling_temperature)
+        elif debiasedbs:
+            self.search = search.DebiasedBeamSearch(tgt_dict, sampling_topk, sampling_temperature)
         else:
             self.search = search.BeamSearch(tgt_dict, naive_stochastic_beam_search, stochastic_beam_search, sampling_topk, sampling_temperature)
 

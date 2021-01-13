@@ -203,6 +203,7 @@ class FairseqTask(object):
                 stochastic_beam_search=args.stochastic_beam_search,
                 naive_stochastic_beam_search=args.naive_stochastic_beam_search,
                 cps=args.cps,
+                debiasedbs=args.debiasedbs,
                 match_source_len=args.match_source_len,
                 no_repeat_ngram_size=args.no_repeat_ngram_size,
             )
