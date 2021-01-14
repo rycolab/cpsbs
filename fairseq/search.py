@@ -219,14 +219,9 @@ class DebiasedBeamSearch(Search):
         weights = torch.exp(F.log_softmax(lprobs_t.view(bsz, -1))).clone()
         weights.scatter_(1, cand_ind, 0.0)
 
-        # print(cand_lprobs.size())
         sum_prob = torch.sum(weights, 1).unsqueeze(-1)
         self.scores_buf = torch.cat([torch.exp(cand_lprobs), sum_prob], 1)
-        print(lprobs_t.view(bsz, -1))
-        print(cand_ind)
-        print(weights)
-        print('nan values:', torch.sum(torch.isnan(weights)).item())
-        print('Negative values:', torch.sum(weights < 0).item())
+
 
         last_ind = torch.multinomial(weights, 1)
         self.indices_buf = torch.cat((cand_ind, last_ind), 1)
