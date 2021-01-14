@@ -222,7 +222,7 @@ class DebiasedBeamSearch(Search):
         # print(cand_lprobs.size())
         sum_prob = torch.sum(weights, 1).unsqueeze(-1)
         self.scores_buf = torch.cat([torch.exp(cand_lprobs), sum_prob], 1)
-        print(sum_prob)
+        print(weights)
 
         last_ind = torch.multinomial(weights, 1)
         self.indices_buf = torch.cat((cand_ind, last_ind), 1)
