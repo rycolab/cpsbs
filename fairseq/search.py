@@ -216,7 +216,7 @@ class DebiasedBeamSearch(Search):
                 lprobs_t.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
             ) - 1,
             )
-        weights = torch.exp(lprobs_t).view(bsz, -1).clone()
+        weights = torch.exp(F.log_softmax(lprobs_t.view(bsz, -1))).clone()
         weights.scatter_(1, cand_ind, 0.0)
 
         # print(cand_lprobs.size())
