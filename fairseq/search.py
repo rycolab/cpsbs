@@ -222,6 +222,8 @@ class DebiasedBeamSearch(Search):
         # print(cand_lprobs.size())
         sum_prob = torch.sum(weights, 1).unsqueeze(-1)
         self.scores_buf = torch.cat([torch.exp(cand_lprobs), sum_prob], 1)
+        print(lprobs_t.view(bsz, -1))
+        print(cand_ind)
         print(weights)
         print('nan values:', torch.sum(torch.isnan(weights)).item())
         print('Negative values:', torch.sum(weights < 0).item())
