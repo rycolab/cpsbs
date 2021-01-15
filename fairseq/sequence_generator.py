@@ -86,6 +86,7 @@ class SequenceGenerator(object):
         self.unk_penalty = unk_penalty
         self.retain_dropout = retain_dropout
         self.match_source_len = match_source_len
+        self.debiasedbs = debiasedbs
         self.no_repeat_ngram_size = no_repeat_ngram_size
 
         assert sampling_topk < 0 or sampling, '--sampling-topk requires --sampling'
@@ -413,6 +414,12 @@ class SequenceGenerator(object):
                         cand_indices[partial_prefix_mask] = partial_indices[partial_prefix_mask]
                         cand_beams[partial_prefix_mask] = partial_beams[partial_prefix_mask]
                 else:
+                    if self.debiasedbs:
+                        for bbsz_idx in range(bsz * beam_size):
+                            if tokens[bbsz_idx, step] == 2 and step != 0:
+                                lprobs[bbsz_idx, 2] = -math.inf #we shouldn't repick the EOS tokens
+                        # print(tokens[bbsz_idx, :step + 1])
+                        # print(lprobs.size())
                     cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
                         step,
                         lprobs.view(bsz, -1, self.vocab_size),

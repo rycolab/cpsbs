@@ -212,7 +212,7 @@ class DebiasedBeamSearch(Search):
             k=min(
                 # Take the best 2 x beam_size predictions. We'll choose the first
                 # beam_size of these which don't predict eos to continue with.
-                beam_size * 2,
+                (beam_size),
                 lprobs_t.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
             ) - 1,
             )
@@ -224,6 +224,7 @@ class DebiasedBeamSearch(Search):
 
 
         last_ind = torch.multinomial(weights, 1)
+        # print(last_ind)
         self.indices_buf = torch.cat((cand_ind, last_ind), 1)
 
         # Gather cumulative
