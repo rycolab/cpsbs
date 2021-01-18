@@ -222,15 +222,15 @@ class DebiasedBeamSearch(Search):
                 lprobs_t.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
             ) - 1,
             )
-        weights = torch.exp(F.log_softmax(lprobs_t.view(bsz, -1))).clone()
-        weights.scatter_(1, cand_ind, 0.0)
+        weights = lprobs_t.view(bsz, -1).clone()
+        weights.scatter_(1, cand_ind, -math.inf)
 
-        sum_prob = torch.sum(weights, 1).unsqueeze(-1)
-        self.scores_buf = torch.cat([torch.exp(cand_lprobs), sum_prob], 1)
+        sum_prob = torch.logsumexp(weights, 1).unsqueeze(-1)
+        self.scores_buf = torch.cat([cand_lprobs, sum_prob], 1)
 
+        weights = torch.exp(F.log_softmax(weights, -1))
 
         last_ind = torch.multinomial(weights, 1)
-        # print(last_ind)
         self.indices_buf = torch.cat((cand_ind, last_ind), 1)
 
         # Gather cumulative
