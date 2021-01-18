@@ -415,25 +415,36 @@ class SequenceGenerator(object):
                         cand_beams[partial_prefix_mask] = partial_beams[partial_prefix_mask]
                 else:
                     if self.debiasedbs:
+                        banned_hypos = [False for _ in range(bsz * beam_size)]
                         for bbsz_idx in range(bsz * beam_size):
-                            if tokens[bbsz_idx, step] == 2 and step != 0:
-                                lprobs[bbsz_idx, 2] = -math.inf #we shouldn't repick the EOS tokens
-                        # print(tokens[bbsz_idx, :step + 1])
-                        # print(lprobs.size())
-                    cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
-                        step,
-                        lprobs.view(bsz, -1, self.vocab_size),
-                        scores.view(bsz, beam_size, -1)[:, :, :step],
-                        log_ps.view(bsz, beam_size, -1)[:, :, :step],
-                        log_ps_t.view(bsz, beam_size, -1)[:, :, :step]
-                    )
+                            for step_idx in range(1, step+1):
+                                if tokens[bbsz_idx, step_idx] == 2:
+                                    banned_hypos[bbsz_idx] = True
+                                    break
+                        cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
+                            step,
+                            lprobs.view(bsz, -1, self.vocab_size),
+                            torch.tensor(banned_hypos).view(bsz, -1),
+                            scores.view(bsz, beam_size, -1)[:, :, :step],
+                            log_ps.view(bsz, beam_size, -1)[:, :, :step],
+                            log_ps_t.view(bsz, beam_size, -1)[:, :, :step]
+                        )
+                    else:
+                        cand_scores, cand_log_p, cand_log_p_t, cand_indices, cand_beams = self.search.step(
+                            step,
+                            lprobs.view(bsz, -1, self.vocab_size),
+                            scores.view(bsz, beam_size, -1)[:, :, :step],
+                            log_ps.view(bsz, beam_size, -1)[:, :, :step],
+                            log_ps_t.view(bsz, beam_size, -1)[:, :, :step]
+                        )
             else:
                 # Note: we have one flat batch of bsz * beam_size, by sorting we mix everything
                 # However, we will pass along the indices of the sort, from which the id of the sentence
                 # can be recovered (by computing index % bsz), and this is used in the finalize_hypos
                 # this may seem a bit inefficient, comparing to reshaping and then sorting for each sentence,
                 # but this way we can deal with varying numbers of samples per sequence easily
-                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS):
+                if ((isinstance(self.search, search.BeamSearch)) and self.search.stochastic) or isinstance(self.search, search.CPS) \
+                        or isinstance(self.search, search.DebiasedBeamSearch):
                     # For beam search, we simply stop here with the k samples we have
                     # Sort by the perturbed log-probability
                     torch.sort(

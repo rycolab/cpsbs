@@ -188,13 +188,19 @@ class DebiasedBeamSearch(Search):
         assert self.sampling_topk == -1, "Sampling top-k for beam search not yet supported"
         self.sampling_temperature = sampling_temperature
 
-    def step(self, step, lprobs, scores, log_ps, log_ps_t):
+    def step(self, step, lprobs, banned_hypos, scores, log_ps, log_ps_t):
         super()._init_buffers(lprobs)
         bsz, beam_size, vocab_size = lprobs.size()
 
         lprobs_t = lprobs.clone()
         if self.sampling_temperature != 1.0:
             lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
+
+        for b_idx in range(bsz):
+            for beam_idx in range(beam_size):
+                if banned_hypos[b_idx, beam_idx]:
+                    for token_idx in range(vocab_size):
+                        lprobs_t[b_idx, beam_idx, token_idx] = -math.inf
 
         if step == 0:
             # at the first step all hypotheses are equally likely, so use
@@ -238,6 +244,7 @@ class DebiasedBeamSearch(Search):
 
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
+
         return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
