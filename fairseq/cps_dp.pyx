@@ -1,10 +1,11 @@
 import numpy as np
+from libc.math cimport NAN
 
 cimport cython
 from cython.parallel import prange
 
 cimport numpy as np
-from libc.math cimport exp, log1p
+from libc.math cimport exp, log1p, log, expm1, abs
 
 
 cdef extern from "math.h":
@@ -12,6 +13,25 @@ cdef extern from "math.h":
 
 ctypedef np.float64_t DTYPE_t
 ctypedef np.int64_t DTYPE_int_t
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cdef inline DTYPE_t log1mexp(DTYPE_t x):
+    """
+    Numerically stable implementation of log(1-exp(x))
+    Note: function is finite for x < 0.
+    Source:
+    http://cran.r-project.org/web/packages/Rmpfr/vignettes/log1mexp-note.pdf
+    """
+    cdef DTYPE_t a
+    if x >= 0:
+        return NAN
+    else:
+        a = abs(x)
+        if 0 < a <= 0.693:
+            return log(-expm1(-a))
+        else:
+            return log1p(-exp(-a))
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -48,7 +68,6 @@ cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y) nogil:
             return x + log1pexp(y-x)
         else:
             return y + log1pexp(x-y)
-
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -92,13 +111,18 @@ def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced, np.ndarray
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] selected_inds, int k, int bsz):
+def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] selected_inds, int k):
     cdef long n = len(logp)
     k = min(n, k)
 
     cdef list samples_idx = []
     cdef list selected_incs = []
     cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
+    # cdef np.ndarray[DTYPE_t, ndim=1] log_weights
+    # log_weights = logp - np.array(list(map(log1mexp, logp)))
+    # print(logp)
+    # print(log_weights)
+    # print("=====")
 
     cdef long i
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
