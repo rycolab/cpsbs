@@ -86,8 +86,6 @@ class CPS(Search):
         logp: log-probability distribution (unnormalized is ok) over discrete random variable
         """
         assert self.log_threshold <= 0
-        print(self.log_threshold)
-
         def log_softmax(x):
             c = x.max()
             logsumexp = np.log(np.exp(x - c).sum())
