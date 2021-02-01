@@ -118,8 +118,8 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] sel
     cdef list samples_idx = []
     cdef list selected_incs = []
     cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
-    # cdef np.ndarray[DTYPE_t, ndim=1] log_weights
-    # log_weights = logp - np.array(list(map(log1mexp, logp)))
+    cdef np.ndarray[DTYPE_t, ndim=1] log_weights
+    log_weights = logp - np.array(list(map(log1mexp, logp)))
     # print(logp)
     # print(log_weights)
     # print("=====")
@@ -131,10 +131,10 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] sel
     cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
 
     to_pick_number = k
-    subset_sum_product_probs = calc_normalization(logp, k)
-    log_inclusion_probs = calc_log_inclusion_probs(logp, subset_sum_product_probs, k)
+    subset_sum_product_probs = calc_normalization(log_weights, k)
+    log_inclusion_probs = calc_log_inclusion_probs(log_weights, subset_sum_product_probs, k)
     for i in range(n, 0, -1):
-        thresh = logp[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
+        thresh = log_weights[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
         if thresholds[i - 1] < thresh:
             samples_idx.append(selected_inds[i - 1])
             selected_incs.append(log_inclusion_probs[i - 1])
