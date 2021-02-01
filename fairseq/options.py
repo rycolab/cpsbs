@@ -438,8 +438,8 @@ def add_generation_args(parser):
                        help='Use naive stochastic Beam Search (e.g. sample without replacement with sampling-temperature)')
     group.add_argument('--cps', action='store_true',
                        help='Use cps sampling (e.g. poisson samples without replacement with sampling-temperature)')
-    group.add_argument('--debiasedbs', action='store_true',
-                       help='Use debiased beam search')
+    group.add_argument('--nucleus-threshold', default=1., type=float, metavar='N',
+                       help='Probability threshold in nucleus filtering')
     group.add_argument('--diverse-beam-groups', default=-1, type=int, metavar='N',
                        help='number of groups for Diverse Beam Search')
     group.add_argument('--diverse-beam-strength', default=0.5, type=float, metavar='N',

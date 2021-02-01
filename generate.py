@@ -164,7 +164,7 @@ def main(args):
                             import math
                             print('H-{}\t(score={}, p={}, p_t={})\t{}'.format(
                                 sample_id,
-                                hypo['score'], hypo['log_p'], math.exp(hypo['log_p_t']),
+                                hypo['score'], math.exp(hypo['log_p']), math.exp(hypo['log_p_t']),
                                 hypo_str
                             ))
                             print('P-{}\t{}'.format(

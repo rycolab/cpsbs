@@ -11,17 +11,13 @@ import torch
 import torch.nn.functional as F
 
 from fairseq.gumbel import gumbel_like, gumbel_with_maximum
-from fairseq.utils import log_add
-
 import numpy as np
 from fairseq.cps_dp import sample
 from torch.multiprocessing import Pool
 from torch import multiprocessing
-import cProfile
 
 
 class Search(object):
-
     def __init__(self, tgt_dict):
         self.pad = tgt_dict.pad()
         self.unk = tgt_dict.unk()
@@ -68,11 +64,12 @@ class Search(object):
 
 
 class CPS(Search):
-    def __init__(self, tgt_dict, sampling_topk=-1, sampling_temperature=1.0):
+    def __init__(self, tgt_dict, sampling_topk=-1, sampling_temperature=1.0, nucleus_p=1.):
         super().__init__(tgt_dict)
         self.sampling_topk = sampling_topk
         assert self.sampling_topk == -1
         self.sampling_temperature = sampling_temperature
+        self.log_threshold = np.log(nucleus_p)
 
     def _init_buffers(self, t):
         super()._init_buffers(t)
@@ -84,12 +81,12 @@ class CPS(Search):
         self.samples_idx = torch.LongTensor().to(device=t.device)
         self.log_inclusion_probs = torch.FloatTensor().to(device=t.device)
 
-    @staticmethod
-    def log_nucleus_multinomial_sample(logp, k, nucleus_p=np.log(0.99)):
+    def log_nucleus_multinomial_sample(self, logp, k):
         """
         logp: log-probability distribution (unnormalized is ok) over discrete random variable
         """
-        assert nucleus_p <= 0
+        assert self.log_threshold <= 0
+        print(self.log_threshold)
 
         def log_softmax(x):
             c = x.max()
@@ -102,7 +99,7 @@ class CPS(Search):
         sorted_logits = logp[sorted_inds]
         cumulative_lprobs = np.logaddexp.accumulate(sorted_logits)
 
-        sorted_indices_to_pick = cumulative_lprobs <= nucleus_p
+        sorted_indices_to_pick = cumulative_lprobs <= self.log_threshold
         inds = sorted_inds[sorted_indices_to_pick]
         if len(inds) < k:
             inds = sorted_inds[0:k]
@@ -127,7 +124,7 @@ class CPS(Search):
         incs = []
         for j in range(bsz):
             selected_inds, logits = self.log_nucleus_multinomial_sample(logp_np[j,:], k)
-            sample_idx, sample_inc = sample(logits, selected_inds, k, bsz)
+            sample_idx, sample_inc = sample(logits, selected_inds, k)
             extended_inc = np.zeros(maxlen)
             extended_inc[sample_idx] = sample_inc
             samples.append(sample_idx)
@@ -178,73 +175,6 @@ class CPS(Search):
         )
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
-        return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
-
-
-class DebiasedBeamSearch(Search):
-    def __init__(self, tgt_dict, sampling_topk=-1, sampling_temperature=1.0):
-        super().__init__(tgt_dict)
-        self.sampling_topk = sampling_topk
-        assert self.sampling_topk == -1, "Sampling top-k for beam search not yet supported"
-        self.sampling_temperature = sampling_temperature
-
-    def step(self, step, lprobs, banned_hypos, scores, log_ps, log_ps_t):
-        super()._init_buffers(lprobs)
-        bsz, beam_size, vocab_size = lprobs.size()
-
-        lprobs_t = lprobs.clone()
-        if self.sampling_temperature != 1.0:
-            lprobs_t = F.log_softmax(lprobs / self.sampling_temperature, -1)
-
-        for b_idx in range(bsz):
-            for beam_idx in range(beam_size):
-                if banned_hypos[b_idx, beam_idx]:
-                    for token_idx in range(vocab_size):
-                        lprobs_t[b_idx, beam_idx, token_idx] = -math.inf
-
-        if step == 0:
-            # at the first step all hypotheses are equally likely, so use
-            # only the first beam
-            lprobs_t = lprobs_t[:, ::beam_size, :].contiguous()
-            lprobs = lprobs[:, ::beam_size, :].contiguous()
-
-        else:
-            # make probs contain cumulative scores for each hypothesis
-            lprobs_t.add_(log_ps_t[:, :, step - 1].unsqueeze(-1))
-            lprobs.add_(log_ps[:, :, step - 1].unsqueeze(-1))
-
-        cand_lprobs, cand_ind = torch.topk(
-            lprobs_t.view(bsz, -1),
-            k=min(
-                # Take the best 2 x beam_size predictions. We'll choose the first
-                # beam_size of these which don't predict eos to continue with.
-                (beam_size),
-                lprobs_t.view(bsz, -1).size(1) - 1,  # -1 so we never select pad
-            ) - 1,
-            )
-        weights = lprobs_t.view(bsz, -1).clone()
-        weights.scatter_(1, cand_ind, -math.inf)
-
-        sum_prob = torch.logsumexp(weights, 1).unsqueeze(-1)
-        self.scores_buf = torch.cat([cand_lprobs, sum_prob], 1)
-
-        weights = torch.exp(F.log_softmax(weights, -1))
-
-        last_ind = torch.multinomial(weights, 1)
-        self.indices_buf = torch.cat((cand_ind, last_ind), 1)
-
-        # Gather cumulative
-        torch.gather(
-            lprobs.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_buf
-        )
-
-        torch.gather(
-            lprobs_t.view(bsz, -1), -1, self.indices_buf, out=self.log_ps_t_buf
-        )
-
-        torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
-        self.indices_buf.fmod_(vocab_size)
-
         return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 
