@@ -69,7 +69,7 @@ class CPS(Search):
         self.sampling_topk = sampling_topk
         assert self.sampling_topk == -1
         self.sampling_temperature = sampling_temperature
-        self.log_threshold = np.log(nucleus_p)
+        self.log_threshold = np.log(nucleus_p)  # threshold for nucleus sampling
 
     def _init_buffers(self, t):
         super()._init_buffers(t)
@@ -83,7 +83,10 @@ class CPS(Search):
 
     def log_nucleus_multinomial_sample(self, logp, k):
         """
-        logp: log-probability distribution (unnormalized is ok) over discrete random variable
+        This function filters elements that have more than a threshold probability mass
+        @param logp: log-probability distribution (unnormalized is ok) over discrete random variable
+        @param k: final sample size
+        @return: nucleus samples indices and their log probabilities
         """
         assert self.log_threshold <= 0
         def log_softmax(x):
@@ -99,12 +102,20 @@ class CPS(Search):
 
         sorted_indices_to_pick = cumulative_lprobs <= self.log_threshold
         inds = sorted_inds[sorted_indices_to_pick]
-        if len(inds) < k:
+        if len(inds) < k:  # we don't want to end up having less than k samples
             inds = sorted_inds[0:k]
 
         return inds, logp[inds]
 
     def cps_sample(self, logp, k, bsz, maxlen):
+        """
+        This function iterates through the batches and use cps sampling function in Cython to generate samples
+        @param logp: log probabilities of candidates
+        @param k: sample size
+        @param bsz: batch size
+        @param maxlen: maximum number of hypothesis which should be vocab size in NMT models
+        @return: inclusion probabilities for all the candidates and samples indices
+        """
         n = logp.size()[1]
         torch.zeros([bsz, k], dtype=torch.int64, out=self.samples_idx)
         torch.zeros([bsz, n], out=self.log_inclusion_probs)
@@ -160,7 +171,7 @@ class CPS(Search):
                                                         min(beam_size * 2, maxlen - 1),
                                                         bsz, maxlen)
 
-        cand_scores = cand_scores.to(dtype=torch.float32)
+        cand_scores = cand_scores.to(dtype=torch.float32)  # scores are inclusion probs
         if step != 0:
             cand_scores = cand_scores.view(bsz, beam_size, -1)
             cand_scores.add_(log_inc_probs[:, :, step - 1].unsqueeze(-1))
@@ -173,6 +184,7 @@ class CPS(Search):
         )
         torch.floor_divide(self.indices_buf, vocab_size, out=self.beams_buf)
         self.indices_buf.fmod_(vocab_size)
+
         return self.log_ps_t_buf, self.scores_buf, self.log_ps_t_buf, self.indices_buf, self.beams_buf
 
 

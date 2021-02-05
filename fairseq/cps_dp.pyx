@@ -119,10 +119,10 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] sel
     cdef list selected_incs = []
     cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
     cdef np.ndarray[DTYPE_t, ndim=1] log_weights
-    log_weights = logp - np.array(list(map(log1mexp, logp)))
-    # print(logp)
-    # print(log_weights)
-    # print("=====")
+    cdef np.ndarray[DTYPE_t, ndim=1] log_prob_filtered
+    log_prob_filtered = logp.copy()
+    log_prob_filtered[log_prob_filtered > 0.99] = 0.99
+    log_weights = log_prob_filtered - np.array(list(map(log1mexp, log_prob_filtered)))
 
     cdef long i
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
