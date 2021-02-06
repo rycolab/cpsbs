@@ -1,4 +1,4 @@
-![Banner](https://github.com/AfraAmini/cpsbs/blob/master/header.jpg)
+![Banner](https://github.com/AfraAmini/cpsbs/blob/main/header.jpg)
 
 # Conditional Poisson Stochastic Beam Search
 
