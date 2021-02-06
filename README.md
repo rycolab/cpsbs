@@ -7,7 +7,7 @@
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/AfraAmini/cpsbs)
 ![GitHub](https://img.shields.io/github/license/AfraAmini/cpsbs)
 
-This repository contains implementation of Conditional Poisson and Sampford beam search which can be used to draw samples *without* replacement from sequence models.
+This repository contains implementation of Conditional Poisson Stochastic Beam Search, which can be used to draw samples *without* replacement from sequence models.
 *For more details, [see our paper](link).*
 
 # Table of contents
@@ -20,30 +20,49 @@ This repository contains implementation of Conditional Poisson and Sampford beam
 # Installation
 [(Back to top)](#table-of-contents)
 
+For detailed installation instructions and basic fairseq usage instruction, please go to [the fairseq repository](https://github.com/pytorch/fairseq).
+
+Basically, to install and develop fairseq locally:
+```bash
+pip install --editable ./
+
+# on MacOS:
+# CFLAGS="-stdlib=libc++" pip install --editable ./
+```
+*Note*: If you are using MacOS `Xpreprocessor` argument should be added to 
+the setup of CPS dynamic program. So the extension definition in `setup.py` file
+should look like this:
+```python
+cps = [Extension('fairseq.cps_dp', ["fairseq/cps_dp.pyx"],
+                 include_dirs=[numpy.get_include()],
+                 extra_compile_args=['-Xpreprocessor', '-fopenmp'],
+                 extra_link_args=['-Xpreprocessor', '-fopenmp']
+                 )]
+```
 
 # Usage 
 [(Back to top)](#table-of-contents)
 
-For installation instructions and basic fairseq usage instruction, please go to [the fairseq repository](https://github.com/pytorch/fairseq).
-To use Stochastic Beam Search for generation:
-- Add the ``--stochastic-beam-search`` option and use the (normal) ``--beam`` option with ``generate.py``
-- Set the ``--nbest`` option equal to ``--beam`` (using a beam size greater than nbest is equivalent)
-- For theoretical correctness of the sampling algorithm, you cannot use heuristic beam search modifications such as length normalization and early stopping. Therefore run *with* ``--no-early-stopping`` and ``--unnormalized``
-- Use the ``--sampling_temperature`` option to specify the temperature used for (local) softmax normalization. For models trained using maximum likelihood, the default temperature of 1.0 does not yield good translations, so use a lower temperature.
-- Example: ``python generate.py --stochastic-beam-search --beam 5 --nbest 5 --no-early-stopping --unnormalized --sampling_temperature 0.3 ...``
+Example:
+```bash
+python generate.py --cps --num-experiments 3 
+                    --beam 5 --nbest 5 
+                    --nucleus-threshold 0.99
+                    --unnormalized --sampling-temperature 0.1 
+                    [DATAPATH] --path [MODELPATH]
+```
+- ``--cps``: to use CPSBS for decoding
+- ``-num-experiments``: repeat the procedure for the specified number of times. Useful for building estimators.
+- ``--beam``: beam size or sample size
+- ``--nbest``: equal to ``--beam`` (using a beam size greater than nbest is equivalent)
+- ``--nucleus-threshold``: probability threshold for nucleus filtering. Default is 1. (no filtering)
+- ``--no-early-stopping`` and ``--unnormalized``: for theoretical correctness of the sampling algorithm 
+- ``--sampling_temperature``: temperature used for local softmax normalization. 
 
 # Citation
 [(Back to top)](#table-of-contents)
 
-As the beam search implementation in fairseq is a bit complicated (see also [here](https://github.com/pytorch/fairseq/issues/535)), this implementation of Stochastic Beam Search has some rough edges and is not guaranteed to be compatibel with all fairseq generation parameters.
-The code is not specifically optimized for memory usage etc.
-
-If you have any comments or suggestions, please create an issue or contact me (e-mail address in the paper). If you use Stochastic Beam Search, we would be happy if you cite our paper: 
+If you have any comments or suggestions, please let us know by creating an issue or contacting me. If you use CPSBS, we would be happy if you cite our paper: 
 ```
-@inproceedings{kool2019stochastic,
-  title={Stochastic Beams and Where to Find Them: The Gumbel-Top-k Trick for Sampling Sequences Without Replacement},
-  author={Wouter Kool and Herke van Hoof and Max Welling},
-  booktitle={International Conference on Machine Learning},
-  year={2019}
-}
+
 ```
