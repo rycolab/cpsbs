@@ -1,4 +1,6 @@
-# Conditional Poisson Beams
+![Banner](https://github.com/AfraAmini/cpsbs/blob/master/header.jpg)
+
+# Conditional Poisson Stochastic Beam Search
 
 This repository contains implementation of Conditional Poisson and Sampford beam search which can be used to draw samples *without* replacement from sequence models.
 *For more details, [see our paper](link).*
