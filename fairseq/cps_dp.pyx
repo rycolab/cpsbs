@@ -51,7 +51,6 @@ cdef inline DTYPE_t log1pexp(DTYPE_t x) nogil:
     else:
         return x
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y) nogil:
@@ -65,13 +64,20 @@ cdef inline DTYPE_t log_add(DTYPE_t x, DTYPE_t y) nogil:
         return x
     else:
         if y <= x:
-            return x + log1pexp(y-x)
+            return x + log1pexp(y - x)
         else:
-            return y + log1pexp(x-y)
+            return y + log1pexp(x - y)
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
+    """
+    This function calculates the normalization factor in CPS which is
+    sum of product of weights of all sets that have size k
+    @param logp_sliced: weights of candidates in log space
+    @param k: sample size
+    @return: dp matrix containing all normalization factors
+    """
     cdef int n = len(logp_sliced)
     cdef np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs
 
@@ -87,41 +93,60 @@ def calc_normalization(np.ndarray[DTYPE_t, ndim=1] logp_sliced, int k):
             subset_sum_product_probs[r, i] = log_add(subset_sum_product_probs[r, i - 1], intermediate_res)
     return subset_sum_product_probs
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced, np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs, int k):
+def calc_log_inclusion_probs(np.ndarray[DTYPE_t, ndim=1] logp_sliced,
+                             np.ndarray[DTYPE_t, ndim=2] subset_sum_product_probs, int k):
+    """
+    This function calculates the inclusion probability for CPS design
+    operates in log space
+    @param logp_sliced: weights of candidates which can be probabilities or odds
+    @param subset_sum_product_probs: normalization factors
+    @param k:sample size
+    @return: log inclusion probabilities
+    """
     cdef int n = len(logp_sliced)
     cdef np.ndarray[DTYPE_t, ndim=1] dp = np.full(n, -np.inf, dtype=np.float64)
     cdef np.ndarray[DTYPE_t, ndim=1] log_inclusion_probs
 
-    cdef np.ndarray[DTYPE_t, ndim=2] remaining_subsetsum_product_probs = np.full((k + 2, n + 2), -np.inf, dtype=np.float64)
+    cdef np.ndarray[DTYPE_t, ndim=2] remaining_subsetsum_product_probs = np.full((k + 2, n + 2), -np.inf,
+                                                                                 dtype=np.float64)
     remaining_subsetsum_product_probs[k, :] = 0.
 
     cdef int r
     cdef int i
     for r in range(k, 0, -1):
         for i in prange(n, 0, -1, nogil=True):
-            dp[i-1] = log_add(dp[i-1], subset_sum_product_probs[r - 1, i - 1] + remaining_subsetsum_product_probs[r, i + 1])
-            remaining_subsetsum_product_probs[r, i] = log_add(remaining_subsetsum_product_probs[r + 1, i + 1] + logp_sliced[i-1], remaining_subsetsum_product_probs[r, i + 1])
+            dp[i - 1] = log_add(dp[i - 1],
+                                subset_sum_product_probs[r - 1, i - 1] + remaining_subsetsum_product_probs[r, i + 1])
+            remaining_subsetsum_product_probs[r, i] = log_add(
+                remaining_subsetsum_product_probs[r + 1, i + 1] + logp_sliced[i - 1],
+                remaining_subsetsum_product_probs[r, i + 1])
 
     log_inclusion_probs = logp_sliced + dp - subset_sum_product_probs[k, n]
     return log_inclusion_probs
 
-
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] selected_inds, int k):
+    """
+    This function picks a sample of size k from candidates
+    @param logp: log probability of candidates
+    @param selected_inds: selected candidates after nucleus filtering
+    @param k: sample size
+    @return: selected candidates indices and their inclusion probabilities
+    """
     cdef long n = len(logp)
     k = min(n, k)
 
     cdef list samples_idx = []
     cdef list selected_incs = []
-    cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size= n))
-    cdef np.ndarray[DTYPE_t, ndim=1] log_weights
+    cdef np.ndarray[DTYPE_t, ndim=1] thresholds = np.log(np.random.uniform(size=n))
+
+    cdef np.ndarray[DTYPE_t, ndim=1] log_weights # using odds approximation as weights
     cdef np.ndarray[DTYPE_t, ndim=1] log_prob_filtered
     log_prob_filtered = logp.copy()
-    log_prob_filtered[log_prob_filtered > 0.99] = 0.99
+    log_prob_filtered[log_prob_filtered > 0.99] = 0.99 # clipping in order to prevent NAN generation
     log_weights = log_prob_filtered - np.array(list(map(log1mexp, log_prob_filtered)))
 
     cdef long i
@@ -134,7 +159,8 @@ def sample(np.ndarray[DTYPE_t, ndim=1] logp, np.ndarray[DTYPE_int_t, ndim=1] sel
     subset_sum_product_probs = calc_normalization(log_weights, k)
     log_inclusion_probs = calc_log_inclusion_probs(log_weights, subset_sum_product_probs, k)
     for i in range(n, 0, -1):
-        thresh = log_weights[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[to_pick_number, i]
+        thresh = log_weights[i - 1] + subset_sum_product_probs[to_pick_number - 1, i - 1] - subset_sum_product_probs[
+            to_pick_number, i]
         if thresholds[i - 1] < thresh:
             samples_idx.append(selected_inds[i - 1])
             selected_incs.append(log_inclusion_probs[i - 1])

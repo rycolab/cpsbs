@@ -13,8 +13,6 @@ import torch.nn.functional as F
 from fairseq.gumbel import gumbel_like, gumbel_with_maximum
 import numpy as np
 from fairseq.cps_dp import sample
-from torch.multiprocessing import Pool
-from torch import multiprocessing
 
 
 class Search(object):
@@ -89,6 +87,7 @@ class CPS(Search):
         @return: nucleus samples indices and their log probabilities
         """
         assert self.log_threshold <= 0
+
         def log_softmax(x):
             c = x.max()
             logsumexp = np.log(np.exp(x - c).sum())
@@ -123,16 +122,10 @@ class CPS(Search):
         logp_np = logp.detach().cpu().numpy()
         logp_np = logp_np.astype(np.float64)
 
-        # with Pool(processes=multiprocessing.cpu_count()) as pool:
-        #     multiple_results = [pool.apply_async(sample, args=(logp_np[j, :], k, bsz)) for j in range(bsz)]
-        #     sample_idx_np = np.asarray([el.get()[0] for el in multiple_results])
-        #     sample_idx_np.astype(np.int64)
-        #     log_inclusion_probs_np = np.asarray([el.get()[1] for el in multiple_results])
-
         samples = []
         incs = []
         for j in range(bsz):
-            selected_inds, logits = self.log_nucleus_multinomial_sample(logp_np[j,:], k)
+            selected_inds, logits = self.log_nucleus_multinomial_sample(logp_np[j, :], k)
             sample_idx, sample_inc = sample(logits, selected_inds, k)
             extended_inc = np.zeros(maxlen)
             extended_inc[sample_idx] = sample_inc
