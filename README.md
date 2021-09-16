@@ -1,8 +1,8 @@
 ![Banner](https://github.com/AfraAmini/cpsbs/blob/main/header.jpg)
 
 # Conditional Poisson Stochastic Beam Search
-![GitHub last commit](https://img.shields.io/github/last-commit/AfraAmini/cpsbs)
-![GitHub](https://img.shields.io/github/license/AfraAmini/cpsbs)
+![GitHub last commit](https://img.shields.io/github/last-commit/rycolab/cpsbs)
+![GitHub](https://img.shields.io/github/license/rycolab/cpsbs)
 
 This repository contains implementation of Conditional Poisson Stochastic Beam Search, which can be used to draw samples *without* replacement from sequence models.
 *For more details, [see our paper](link).*
