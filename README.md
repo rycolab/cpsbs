@@ -5,7 +5,7 @@
 ![GitHub](https://img.shields.io/github/license/rycolab/cpsbs)
 
 This repository contains implementation of Conditional Poisson Stochastic Beam Search, which can be used to draw samples *without* replacement from sequence models.
-*For more details, [see our paper](link).*
+*For more details, [see our paper](https://arxiv.org/abs/2109.11034).*
 
 # Table of contents
 - [Project Summary](#conditional-poisson-beams)
@@ -61,5 +61,13 @@ python generate.py --cps --num-experiments 3
 
 If you have any comments or suggestions, please let us know by creating an issue or contacting me. If you use CPSBS, we would be happy if you cite our paper: 
 ```
-
+@inproceedings{meister2021conditional,
+    title={Conditional Poisson Stochastic Beam Search},
+    author={Meister, Clara and Amini, Afra and Viera, Tim and Cotterell, Ryan},
+    year={2021},
+    booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
+    year = "2021",
+    publisher = "Association for Computational Linguistics",
+    url = "https://arxiv.org/abs/2109.11034",
+}
 ```
