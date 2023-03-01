@@ -63,7 +63,7 @@ If you have any comments or suggestions, please let us know by creating an issue
 ```
 @inproceedings{meister2021conditional,
     title={Conditional Poisson Stochastic Beam Search},
-    author={Meister, Clara and Amini, Afra and Viera, Tim and Cotterell, Ryan},
+    author={Meister, Clara and Amini, Afra and Vieira, Tim and Cotterell, Ryan},
     year={2021},
     booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP)",
     year = "2021",
